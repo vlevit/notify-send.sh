@@ -174,8 +174,9 @@ while (( $# > 0 )) ; do
         -r|--replace|--replace=*)
             [[ "$1" = --replace=* ]] && REPLACE_ID="${1#*=}" || { shift; REPLACE_ID="$1"; }
             ;;
-        -s|--close)
-            notify_close "$2"
+        -s|--close|--close=*)
+            [[ "$1" = --close=* ]] && close_id="${1#*=}" || { shift; close_id="$1"; }
+            notify_close "$close_id"
             exit $?
             ;;
         --)
