@@ -28,9 +28,9 @@ additional ones:
       -v, --version                     Version of the package.
 
 
-So, for example, notification of a new email can be done the following way:
+So, for example, to notify a user of a new email we can run:
 
-    notify-send.sh --icon=mail-unread --app-name=mail --hint=string:sound-name:message-new-email Subject Message
+    $ notify-send.sh --icon=mail-unread --app-name=mail --hint=string:sound-name:message-new-email Subject Message
 
 To replace or close existing message first we should know its id. To
 get id we have to run notify-send.sh with `--print-id`:
@@ -38,7 +38,7 @@ get id we have to run notify-send.sh with `--print-id`:
     $ notify-send.sh --print-id Subject Message
     10
 
-Now we can update this message using `--replace` option:
+Now we can update this notification using `--replace` option:
 
     $ notify-send.sh --replace=10 --print-id "New Subject" "New Message"
     10
