@@ -2,7 +2,7 @@
 
 notify-send.sh is a drop-in replacement for notify-send (from
 libnotify) with ability to update and close existing notifications.
-The only dependency is gdbus (from glib2).
+The dependencies are bash and gdbus (shipped with glib2).
 
 ## Usage
 
