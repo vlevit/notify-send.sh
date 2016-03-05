@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # notify-send.sh - drop-in replacement for notify-send with more features
 # Copyright (C) 2015 Vyacheslav Levit <dev@vlevit.org>
