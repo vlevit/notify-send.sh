@@ -46,6 +46,7 @@ Application Options:
   -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
   -p, --print-id                    Print the notification ID to the standard output.
   -r, --replace=ID                  Replace existing notification.
+  -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
   -s, --close=ID                    Close notification.
   -v, --version                     Version of the package.
 
@@ -78,7 +79,9 @@ concat_hints() {
 }
 
 handle_ouput() {
-    if [[ -z "$PRINT_ID" ]] ; then
+    if [[ -n "$STORE_ID" ]] ; then
+        sed 's/(uint32 \([0-9]\+\),)/\1/g' > $STORE_ID
+    elif [[ -z "$PRINT_ID" ]] ; then
         cat > /dev/null
     else
         sed 's/(uint32 \([0-9]\+\),)/\1/g'
@@ -173,6 +176,13 @@ while (( $# > 0 )) ; do
             ;;
         -r|--replace|--replace=*)
             [[ "$1" = --replace=* ]] && REPLACE_ID="${1#*=}" || { shift; REPLACE_ID="$1"; }
+            ;;
+        -R|--replace-file|--replace-file=*)
+            [[ "$1" = --replace-file=* ]] && filename="${1#*=}" || { shift; filename="$1"; }
+            if [[ -f "$filename" ]]; then
+                REPLACE_ID="$(< $filename)"
+            fi
+            STORE_ID="$filename"
             ;;
         -s|--close|--close=*)
             [[ "$1" = --close=* ]] && close_id="${1#*=}" || { shift; close_id="$1"; }
