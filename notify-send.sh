@@ -78,7 +78,7 @@ concat_hints() {
     echo "{$result}"
 }
 
-handle_ouput() {
+handle_output() {
     if [[ -n "$STORE_ID" ]] ; then
         sed 's/(uint32 \([0-9]\+\),)/\1/g' > $STORE_ID
     elif [[ -z "$PRINT_ID" ]] ; then
@@ -91,7 +91,7 @@ handle_ouput() {
 notify () {
     gdbus call "${NOTIFY_ARGS[@]}"  --method org.freedesktop.Notifications.Notify \
           "$APP_NAME" "$REPLACE_ID" "$ICON" "$SUMMARY" "$BODY" \
-          [] "$(concat_hints "${HINTS[@]}")" "int32 $EXPIRE_TIME" | handle_ouput
+          [] "$(concat_hints "${HINTS[@]}")" "int32 $EXPIRE_TIME" | handle_output
 }
 
 notify_close () {
