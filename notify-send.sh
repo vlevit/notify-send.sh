@@ -179,7 +179,7 @@ while (( $# > 0 )) ; do
             ;;
         -R|--replace-file|--replace-file=*)
             [[ "$1" = --replace-file=* ]] && filename="${1#*=}" || { shift; filename="$1"; }
-            if [[ -f "$filename" ]]; then
+            if [[ -s "$filename" ]]; then
                 REPLACE_ID="$(< $filename)"
             fi
             STORE_ID="$filename"
