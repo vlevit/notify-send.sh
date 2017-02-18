@@ -2,7 +2,12 @@
 
 notify-send.sh is a drop-in replacement for notify-send (from
 libnotify) with ability to update and close existing notifications.
-The dependencies are bash and gdbus (shipped with glib2).
+
+The dependencies are `bash` and `gdbus` (shipped with glib2).
+
+For Arch Linux users notify-send.sh is also available in [AUR].
+
+[AUR]: https://aur.archlinux.org/packages/notify-send.sh/
 
 ## Usage
 
@@ -24,6 +29,7 @@ additional ones:
       -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
       -p, --print-id                    Print the notification ID to the standard output.
       -r, --replace=ID                  Replace existing notification.
+      -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
       -s, --close=ID                    Close notification.
       -v, --version                     Version of the package.
 
@@ -46,3 +52,9 @@ Now we can update this notification using `--replace` option:
 Now we may want to close the notification:
 
     $ notify-send.sh --close=10
+
+To enforce only one open notification of a kind use `--replace-file`
+option. For example, to increase volume by 5% and show the current
+volume value you can run:
+
+    $ notify-send.sh --replace-file=/tmp/volumenotification "Increase Volume" "$(amixer sset Master 5%+ | awk '/[0-9]+%/ {print $2,$5}')"
