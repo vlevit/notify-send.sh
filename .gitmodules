@@ -1,3 +1,0 @@
-[submodule "aur"]
-	path = aur
-	url = https://aur4.archlinux.org/notify-send.sh.git
