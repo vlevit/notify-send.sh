@@ -19,6 +19,19 @@
 # Desktop Notifications Specification
 # https://developer.gnome.org/notification-spec/
 
+DIR=`dirname "$0"`
+
+# set -x
+
+run_action_handler () {
+  action=`ps axu | grep "notify-action.sh" | grep -v "grep"`
+  if [[ -z "$action" ]] ; then
+    echo "run_action_handler"
+    ($DIR/notify-action.sh 2> /dev/null &)
+  fi
+}
+run_action_handler
+
 VERSION=0.2
 NOTIFY_ARGS=(--session
              --dest org.freedesktop.Notifications
@@ -44,6 +57,7 @@ Application Options:
   -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
   -c, --category=TYPE[,TYPE...]     Specifies the notification category.
   -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
+  -o, --action=NAME:ACTION           Specifies action button which should be integrated to the notification. NAME will be dispayed, ACTION is the comman to run.
   -p, --print-id                    Print the notification ID to the standard output.
   -r, --replace=ID                  Replace existing notification.
   -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
@@ -61,12 +75,25 @@ convert_type() {
     esac
 }
 
+make_action() {
+  echo "\"notify-send: $2\", \"$1\""
+}
+
 make_hint() {
     type=$(convert_type "$1")
     [[ ! $? = 0 ]] && return 1
     name="$2"
     [[ "$type" = string ]] && value="\"$3\"" || value="$3"
     echo "\"$name\": <$type $value>"
+}
+
+concat_actions() {
+    local result="$1"
+    shift
+    for s in "$@"; do
+        result="$result, $s"
+    done
+    echo "[$result]"
 }
 
 concat_hints() {
@@ -91,7 +118,7 @@ handle_output() {
 notify () {
     gdbus call "${NOTIFY_ARGS[@]}"  --method org.freedesktop.Notifications.Notify \
           "$APP_NAME" "$REPLACE_ID" "$ICON" "$SUMMARY" "$BODY" \
-          [] "$(concat_hints "${HINTS[@]}")" "int32 $EXPIRE_TIME" | handle_output
+          "$(concat_actions "${ACTIONS[@]}")" "$(concat_hints "${HINTS[@]}")" "int32 $EXPIRE_TIME" | handle_output
 }
 
 notify_close () {
@@ -129,6 +156,16 @@ process_hint() {
         exit 1
     fi
     HINTS=("${HINTS[@]}" "$hint")
+}
+
+process_action() {
+    IFS=: read name value <<<"$1"
+    if [[ -z "$name" ]] || [[ -z "$value" ]]; then
+        echo "Invalid action syntax specified. Use NAME:VALUE."
+        exit 1
+    fi
+    action="$(make_action "$name" "$value")"
+    ACTIONS=("${ACTIONS[@]}" "$action")
 }
 
 process_posargs() {
@@ -171,6 +208,13 @@ while (( $# > 0 )) ; do
             [[ "$1" = --hint=* ]] && hint="${1#*=}" || { shift; hint="$1"; }
             process_hint "$hint"
             ;;
+    -o | --action | --action=*)
+        [[ "$1" == --action=* ]] && action="${1#*=}" || {
+            shift
+            action="$1"
+        }
+        process_action "$action"
+        ;;
         -p|--print-id)
             PRINT_ID=yes
             ;;
