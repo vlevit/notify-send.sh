@@ -27,7 +27,7 @@ additional ones:
       -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
       -c, --category=TYPE[,TYPE...]     Specifies the notification category.
       -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
-      -o, --action=NAME:ACTION           Specifies action button which should be integrated to the notification. NAME will be dispayed, ACTION is the comman to run.
+      -o, --action=NAME:ACTION          Specifies action button which should be integrated to the notification. NAME will be dispayed, ACTION is the comman to run.
       -p, --print-id                    Print the notification ID to the standard output.
       -r, --replace=ID                  Replace existing notification.
       -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
@@ -63,3 +63,7 @@ volume value you can run:
 To add a button action on the notification you can run:
 
     $ notify-send.sh "Subject" "Message" -o "display other notification:notify-send.sh 'new Subject' 'New Message'"
+    
+You can specify multiple actions:
+    
+    $ notify-send.sh "Subject" "Message" -o "display first button:notify-send.sh 'new Subject' 'New Message'" -o "display second button:notify-send.sh 'new Subject' 'New Message'"
