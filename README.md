@@ -3,7 +3,7 @@
 notify-send.sh is a drop-in replacement for notify-send (from
 libnotify) with ability to update and close existing notifications.
 
-The dependencies are `bash` and `gdbus` (shipped with glib2).
+The dependencies are `bash`, `gdbus` (shipped with glib2) and `dbus-monitor` (shipped with dbus).
 
 For Arch Linux users notify-send.sh is also available in [AUR].
 
