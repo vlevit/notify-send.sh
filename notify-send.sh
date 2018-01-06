@@ -21,16 +21,12 @@
 
 DIR=`dirname "$0"`
 
-# set -x
-
 run_action_handler () {
   action=`ps axu | grep "notify-action.sh" | grep -v "grep"`
   if [[ -z "$action" ]] ; then
-    echo "run_action_handler"
     ($DIR/notify-action.sh 2> /dev/null &)
   fi
 }
-run_action_handler
 
 VERSION=0.2
 NOTIFY_ARGS=(--session
@@ -57,7 +53,7 @@ Application Options:
   -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
   -c, --category=TYPE[,TYPE...]     Specifies the notification category.
   -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
-  -o, --action=NAME:ACTION           Specifies action button which should be integrated to the notification. NAME will be dispayed, ACTION is the comman to run.
+  -o, --action=NAME:ACTION          Specifies action button which should be integrated to the notification. NAME will be dispayed, ACTION is the comman to run.
   -p, --print-id                    Print the notification ID to the standard output.
   -r, --replace=ID                  Replace existing notification.
   -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
@@ -76,7 +72,7 @@ convert_type() {
 }
 
 make_action() {
-  echo "\"notify-send: $2\", \"$1\""
+  echo "\"notify-send.sh: $2\", \"$1\""
 }
 
 make_hint() {
@@ -116,9 +112,13 @@ handle_output() {
 }
 
 notify () {
+    actions="$(concat_actions "${ACTIONS[@]}")"
+    if [[ ! -z ${actions} ]] ; then
+      run_action_handler
+    fi
     gdbus call "${NOTIFY_ARGS[@]}"  --method org.freedesktop.Notifications.Notify \
           "$APP_NAME" "$REPLACE_ID" "$ICON" "$SUMMARY" "$BODY" \
-          "$(concat_actions "${ACTIONS[@]}")" "$(concat_hints "${HINTS[@]}")" "int32 $EXPIRE_TIME" | handle_output
+          "${actions}" "$(concat_hints "${HINTS[@]}")" "int32 $EXPIRE_TIME" | handle_output
 }
 
 notify_close () {
@@ -208,13 +208,10 @@ while (( $# > 0 )) ; do
             [[ "$1" = --hint=* ]] && hint="${1#*=}" || { shift; hint="$1"; }
             process_hint "$hint"
             ;;
-    -o | --action | --action=*)
-        [[ "$1" == --action=* ]] && action="${1#*=}" || {
-            shift
-            action="$1"
-        }
-        process_action "$action"
-        ;;
+        -o | --action | --action=*)
+            [[ "$1" == --action=* ]] && action="${1#*=}" || { shift; action="$1"; }
+            process_action "$action"
+            ;;
         -p|--print-id)
             PRINT_ID=yes
             ;;
