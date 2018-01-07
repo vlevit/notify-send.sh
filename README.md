@@ -3,7 +3,7 @@
 notify-send.sh is a drop-in replacement for notify-send (from
 libnotify) with ability to update and close existing notifications.
 
-The dependencies are `bash` and `gdbus` (shipped with glib2).
+The dependencies are `bash`, `gdbus` (shipped with glib2) and `dbus-monitor` (shipped with dbus).
 
 For Arch Linux users notify-send.sh is also available in [AUR].
 
@@ -27,6 +27,7 @@ additional ones:
       -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
       -c, --category=TYPE[,TYPE...]     Specifies the notification category.
       -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
+      -o, --action=NAME:ACTION          Specifies action button which should be integrated to the notification. NAME will be dispayed, ACTION is the comman to run.
       -p, --print-id                    Print the notification ID to the standard output.
       -r, --replace=ID                  Replace existing notification.
       -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
@@ -58,3 +59,11 @@ option. For example, to increase volume by 5% and show the current
 volume value you can run:
 
     $ notify-send.sh --replace-file=/tmp/volumenotification "Increase Volume" "$(amixer sset Master 5%+ | awk '/[0-9]+%/ {print $2,$5}')"
+
+To add a button action on the notification you can run:
+
+    $ notify-send.sh "Subject" "Message" -o "display other notification:notify-send.sh 'new Subject' 'New Message'"
+    
+You can specify multiple actions:
+    
+    $ notify-send.sh "Subject" "Message" -o "display first button:notify-send.sh 'new Subject' 'New Message'" -o "display second button:notify-send.sh 'new Subject' 'New Message'"
