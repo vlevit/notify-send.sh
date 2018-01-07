@@ -3,9 +3,15 @@
 notify-send.sh is a drop-in replacement for notify-send (from
 libnotify) with ability to update and close existing notifications.
 
-The dependencies are `bash`, `gdbus` (shipped with glib2) and `dbus-monitor` (shipped with dbus).
+The dependencies are `bash`, `gdbus` (shipped with glib2) and
+`dbus-monitor` (shipped with dbus).
 
-For Arch Linux users notify-send.sh is also available in [AUR].
+In Debian and Ubuntu you can ensure all dependencies are installed
+with the following command:
+
+    $ sudo apt-get install bash dbus libglib2.0-bin
+
+For Arch Linux users notify-send.sh is available in [AUR].
 
 [AUR]: https://aur.archlinux.org/packages/notify-send.sh/
 
@@ -63,7 +69,7 @@ volume value you can run:
 To add a button action on the notification you can run:
 
     $ notify-send.sh "Subject" "Message" -o "display other notification:notify-send.sh 'new Subject' 'New Message'"
-    
+
 You can specify multiple actions:
-    
+
     $ notify-send.sh "Subject" "Message" -o "display first button:notify-send.sh 'new Subject' 'New Message'" -o "display second button:notify-send.sh 'new Subject' 'New Message'"
