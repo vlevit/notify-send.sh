@@ -249,7 +249,7 @@ done
 # urgency is always set
 HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
 
-if [[ -z "$SUMMARY" && -z "$BODY" ]] ; then
+if [[ "$SUMMARY_SET" = n ]] ; then
     help
     exit 1
 else
