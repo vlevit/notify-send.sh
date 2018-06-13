@@ -37,6 +37,7 @@ APP_NAME="${0##*/}"
 REPLACE_ID=0
 URGENCY=1
 HINTS=()
+SUMMARY_SET=n
 
 help() {
     cat <<EOF
@@ -173,7 +174,12 @@ process_posargs() {
         echo "Unknown option $1"
         exit 1
     else
-        [[ -z "$SUMMARY" ]] && SUMMARY="$1" || BODY="$1"
+        if [[ "$SUMMARY_SET" = n ]]; then
+            SUMMARY="$1"
+            SUMMARY_SET=y
+        else
+            BODY="$1"
+        fi
     fi
 }
 
@@ -243,7 +249,7 @@ done
 # urgency is always set
 HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
 
-if [[ -z "$SUMMARY" ]] ; then
+if [[ "$SUMMARY_SET" = n ]] ; then
     help
     exit 1
 else
