@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # notify-send.sh - drop-in replacement for notify-send with more features
-# Copyright (C) 2015-2017 notify-send.sh authors (see AUTHORS file)
+# Copyright (C) 2015-2019 notify-send.sh authors (see AUTHORS file)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,16 +19,7 @@
 # Desktop Notifications Specification
 # https://developer.gnome.org/notification-spec/
 
-DIR=`dirname "$0"`
-
-run_action_handler () {
-  action=`ps axu | grep "notify-action.sh" | grep -v "grep"`
-  if [[ -z "$action" ]] ; then
-    ($DIR/notify-action.sh 2> /dev/null &)
-  fi
-}
-
-VERSION=0.2
+VERSION=1.0
 NOTIFY_ARGS=(--session
              --dest org.freedesktop.Notifications
              --object-path /org/freedesktop/Notifications)
@@ -54,7 +45,9 @@ Application Options:
   -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
   -c, --category=TYPE[,TYPE...]     Specifies the notification category.
   -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
-  -o, --action=NAME:ACTION          Specifies action button which should be integrated to the notification. NAME will be dispayed, ACTION is the comman to run.
+  -o, --action=LABEL:COMMAND        Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.
+  -d, --default-action=COMMAND      Specifies the default action which is usually invoked by clicking the notification.
+  -l, --close-action=COMMAND        Specifies the action invoked when notification is closed.
   -p, --print-id                    Print the notification ID to the standard output.
   -r, --replace=ID                  Replace existing notification.
   -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
@@ -72,16 +65,22 @@ convert_type() {
     esac
 }
 
+make_action_key() {
+    echo "$(tr -dc _A-Z-a-z-0-9 <<< \"$1\")${RANDOM}"
+}
+
 make_action() {
-  echo "\"notify-send.sh: $2\", \"$1\""
+    local action_key="$1"
+    printf -v text "%q" "$2"
+    echo "\"$action_key\", \"$text\""
 }
 
 make_hint() {
     type=$(convert_type "$1")
     [[ ! $? = 0 ]] && return 1
     name="$2"
-    [[ "$type" = string ]] && value="\"$3\"" || value="$3"
-    echo "\"$name\": <$type $value>"
+    [[ "$type" = string ]] && command="\"$3\"" || command="$3"
+    echo "\"$name\": <$type $command>"
 }
 
 concat_actions() {
@@ -102,24 +101,28 @@ concat_hints() {
     echo "{$result}"
 }
 
-handle_output() {
-    if [[ -n "$STORE_ID" ]] ; then
-        sed 's/(uint32 \([0-9]\+\),)/\1/g' > $STORE_ID
-    elif [[ -z "$PRINT_ID" ]] ; then
-        cat > /dev/null
-    else
-        sed 's/(uint32 \([0-9]\+\),)/\1/g'
-    fi
+parse_notification_id(){
+    sed 's/(uint32 \([0-9]\+\),)/\1/g'
 }
 
-notify () {
-    actions="$(concat_actions "${ACTIONS[@]}")"
-    if [[ ! -z ${actions} ]] ; then
-      run_action_handler
+notify() {
+    local actions="$(concat_actions "${ACTIONS[@]}")"
+    local hints="$(concat_hints "${HINTS[@]}")"
+
+    NOTIFICATION_ID=$(gdbus call "${NOTIFY_ARGS[@]}"  \
+                            --method org.freedesktop.Notifications.Notify \
+                            "$APP_NAME" "$REPLACE_ID" "$ICON" "$SUMMARY" "$BODY" \
+                            "${actions}" "${hints}" "int32 $EXPIRE_TIME" \
+                          | parse_notification_id)
+
+    if [[ -n "$STORE_ID" ]] ; then
+        echo "$NOTIFICATION_ID" > $STORE_ID
     fi
-    gdbus call "${NOTIFY_ARGS[@]}"  --method org.freedesktop.Notifications.Notify \
-          "$APP_NAME" "$REPLACE_ID" "$ICON" "$SUMMARY" "$BODY" \
-          "${actions}" "$(concat_hints "${HINTS[@]}")" "int32 $EXPIRE_TIME" | handle_output
+    if [[ -n "$PRINT_ID" ]] ; then
+        echo "$NOTIFICATION_ID"
+    fi
+
+    maybe_run_action_handler
 }
 
 notify_close () {
@@ -146,12 +149,12 @@ process_category() {
 }
 
 process_hint() {
-    IFS=: read type name value <<< "$1"
-    if [[ -z "$name" ]] || [[ -z "$value" ]] ; then
+    IFS=: read type name command <<< "$1"
+    if [[ -z "$name" ]] || [[ -z "$command" ]] ; then
         echo "Invalid hint syntax specified. Use TYPE:NAME:VALUE."
         exit 1
     fi
-    hint="$(make_hint "$type" "$name" "$value")"
+    hint="$(make_hint "$type" "$name" "$command")"
     if [[ ! $? = 0 ]] ; then
         echo "Invalid hint type \"$type\". Valid types are int, double, string and byte."
         exit 1
@@ -159,14 +162,49 @@ process_hint() {
     HINTS=("${HINTS[@]}" "$hint")
 }
 
+maybe_run_action_handler() {
+    if [[ -n "$NOTIFICATION_ID" ]] && [[ -n "$ACTION_COMMANDS" ]]; then
+        local notify_action="$(dirname ${BASH_SOURCE[0]})/notify-action.sh"
+        if [[ -x "$notify_action" ]] ; then
+            "$notify_action" "$NOTIFICATION_ID" "${ACTION_COMMANDS[@]}" &
+            exit 0
+        else
+            echo "executable file not found: $notify_action"
+            exit 1
+        fi
+    fi
+}
+
 process_action() {
-    IFS=: read name value <<<"$1"
-    if [[ -z "$name" ]] || [[ -z "$value" ]]; then
-        echo "Invalid action syntax specified. Use NAME:VALUE."
+    IFS=: read name command <<<"$1"
+    if [[ -z "$name" ]] || [[ -z "$command" ]]; then
+        echo "Invalid action syntax specified. Use NAME:COMMAND."
         exit 1
     fi
-    action="$(make_action "$name" "$value")"
+
+    local action_key="$(make_action_key "$name")"
+    ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
+
+    local action="$(make_action "$action_key" "$name")"
     ACTIONS=("${ACTIONS[@]}" "$action")
+}
+
+process_special_action() {
+
+    action_key="$1"
+    command="$2"
+
+    if [[ -z "$action_key" ]] || [[ -z "$command" ]]; then
+        echo "Command must not be empty"
+        exit 1
+    fi
+
+    ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
+
+    if [[ "$action_key" != close ]]; then
+        local action="$(make_action "$action_key" "$name")"
+        ACTIONS=("${ACTIONS[@]}" "$action")
+    fi
 }
 
 process_posargs() {
@@ -217,6 +255,14 @@ while (( $# > 0 )) ; do
         -o | --action | --action=*)
             [[ "$1" == --action=* ]] && action="${1#*=}" || { shift; action="$1"; }
             process_action "$action"
+            ;;
+        -d | --default-action | --default-action=*)
+            [[ "$1" == --default-action=* ]] && default_action="${1#*=}" || { shift; default_action="$1"; }
+            process_special_action default "$default_action"
+            ;;
+        -l | --close-action | --close-action=*)
+            [[ "$1" == --close-action=* ]] && close_action="${1#*=}" || { shift; close_action="$1"; }
+            process_special_action close "$close_action"
             ;;
         -p|--print-id)
             PRINT_ID=yes

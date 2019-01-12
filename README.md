@@ -3,13 +3,12 @@
 notify-send.sh is a drop-in replacement for notify-send (from
 libnotify) with ability to update and close existing notifications.
 
-The dependencies are `bash`, `gdbus` (shipped with glib2) and
-`dbus-monitor` (shipped with dbus).
+The dependencies are `bash` and `gdbus` (shipped with glib2).
 
 In Debian and Ubuntu you can ensure all dependencies are installed
 with the following command:
 
-    $ sudo apt-get install bash dbus libglib2.0-bin
+    $ sudo apt-get install bash libglib2.0-bin
 
 For Arch Linux users notify-send.sh is available in [AUR].
 
@@ -33,7 +32,9 @@ additional ones:
       -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
       -c, --category=TYPE[,TYPE...]     Specifies the notification category.
       -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
-      -o, --action=NAME:ACTION          Specifies action button which should be integrated to the notification. NAME will be dispayed, ACTION is the comman to run.
+      -o, --action=LABEL:COMMAND        Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.
+      -d, --default-action=COMMAND      Specifies the default action which is usually invoked by clicking the notification.
+      -l, --close-action=COMMAND        Specifies the action invoked when notification is closed.
       -p, --print-id                    Print the notification ID to the standard output.
       -r, --replace=ID                  Replace existing notification.
       -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
