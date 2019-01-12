@@ -34,7 +34,7 @@ additional ones:
       -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
       -o, --action=LABEL:COMMAND        Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.
       -d, --default-action=COMMAND      Specifies the default action which is usually invoked by clicking the notification.
-      -l, --close-action=COMMAND        Specifies the action invoked when notification is closed.
+      -l, --close-action=COMMAND        Specifies the action invoked when the notification is closed.
       -p, --print-id                    Print the notification ID to the standard output.
       -r, --replace=ID                  Replace existing notification.
       -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
@@ -61,16 +61,22 @@ Now we may want to close the notification:
 
     $ notify-send.sh --close=10
 
-To enforce only one open notification of a kind use `--replace-file`
-option. For example, to increase volume by 5% and show the current
-volume value you can run:
+Use `--replace-file` to make sure that no more than one notification
+is created per file. For example, to increase volume by 5% and show
+the current volume value you can run:
 
     $ notify-send.sh --replace-file=/tmp/volumenotification "Increase Volume" "$(amixer sset Master 5%+ | awk '/[0-9]+%/ {print $2,$5}')"
 
-To add a button action on the notification you can run:
+You can add a button to the notification with `-o` or `--default-action=`:
 
-    $ notify-send.sh "Subject" "Message" -o "display other notification:notify-send.sh 'new Subject' 'New Message'"
+    $ notify-send.sh "Subject" "Message" -o "Show another notification:notify-send.sh 'new Subject' 'New Message'"
 
-You can specify multiple actions:
+You can specify multiple actions by passing `-o` multiple times. Use
+`-d` or `--default-action` for action which is usually invoked when
+notification area is clicked. Use `-l` or `--close-action` for action
+performed when notification is closed.
 
-    $ notify-send.sh "Subject" "Message" -o "display first button:notify-send.sh 'new Subject' 'New Message'" -o "display second button:notify-send.sh 'new Subject' 'New Message'"
+    $ notify-send.sh "Subject" "Message" \
+        -d "notify-send.sh 'Default Action'" \
+        -o "Button Action:notify-send.sh 'Button Action'" \
+        -l "notify-send.sh 'Close Action'"
