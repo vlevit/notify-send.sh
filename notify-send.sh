@@ -124,6 +124,7 @@ notify() {
     fi
 
     if [[ -n "$FORCE_EXPIRE" ]] ; then
+        type bc &> /dev/null || { echo "bc command not found. Please install bc package."; exit 1; }
         SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
         ( sleep "$SLEEP_TIME" ; notify_close "$NOTIFICATION_ID" ) &
     fi
