@@ -41,7 +41,8 @@ Help Options:
 Application Options:
   -u, --urgency=LEVEL               Specifies the urgency level (low, normal, critical).
   -t, --expire-time=TIME            Specifies the timeout in milliseconds at which to expire the notification.
-  -a, --app-name=APP_NAME           Specifies the app name for the icon
+  -f, --force-expire                Forcefully closes the notification when the notification has expired.
+  -a, --app-name=APP_NAME           Specifies the app name for the icon.
   -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
   -c, --category=TYPE[,TYPE...]     Specifies the notification category.
   -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
@@ -122,6 +123,12 @@ notify() {
         echo "$NOTIFICATION_ID"
     fi
 
+    if [[ -n "$FORCE_EXPIRE" ]] ; then
+        type bc &> /dev/null || { echo "bc command not found. Please install bc package."; exit 1; }
+        SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
+        ( sleep "$SLEEP_TIME" ; notify_close "$NOTIFICATION_ID" ) &
+    fi
+
     maybe_run_action_handler
 }
 
@@ -190,7 +197,6 @@ process_action() {
 }
 
 process_special_action() {
-
     action_key="$1"
     command="$2"
 
@@ -237,6 +243,9 @@ while (( $# > 0 )) ; do
             ;;
         -t|--expire-time|--expire-time=*)
             [[ "$1" = --expire-time=* ]] && EXPIRE_TIME="${1#*=}" || { shift; EXPIRE_TIME="$1"; }
+            ;;
+        -f|--force-expire)
+            FORCE_EXPIRE=yes
             ;;
         -a|--app-name|--app-name=*)
             [[ "$1" = --app-name=* ]] && APP_NAME="${1#*=}" || { shift; APP_NAME="$1"; }
