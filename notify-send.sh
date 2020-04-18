@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # notify-send.sh - drop-in replacement for notify-send with more features
-# Copyright (C) 2015-2019 notify-send.sh authors (see AUTHORS file)
+# Copyright (C) 2015-2020 notify-send.sh authors (see AUTHORS file)
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 # Desktop Notifications Specification
 # https://developer.gnome.org/notification-spec/
 
-VERSION=1.0
+VERSION=1.1
 NOTIFY_ARGS=(--session
              --dest org.freedesktop.Notifications
              --object-path /org/freedesktop/Notifications)
