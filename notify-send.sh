@@ -243,6 +243,10 @@ while (( $# > 0 )) ; do
             ;;
         -t|--expire-time|--expire-time=*)
             [[ "$1" = --expire-time=* ]] && EXPIRE_TIME="${1#*=}" || { shift; EXPIRE_TIME="$1"; }
+            if ! [[ "$EXPIRE_TIME" =~ ^-?[0-9]+$ ]]; then
+                echo "Invalid expire time: ${EXPIRE_TIME}"
+                exit 1;
+            fi
             ;;
         -f|--force-expire)
             FORCE_EXPIRE=yes
