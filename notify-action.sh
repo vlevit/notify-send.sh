@@ -9,36 +9,26 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 }
 
 SEND_SH=${0%/*}/notify-send.sh
-GDBUS_MONITOR_PID=${TMP}/${APP_NAME:=${SELF}}.${$}.p
-GDBUS_MONITOR=(gdbus monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
+GDBUS_PIDF=${TMP}/${APP_NAME:=${SELF}}.${$}.p
+GDBUS_ARGS=(gdbus monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
 abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
 
-NOTIFICATION_ID="$1"
-[[ "$NOTIFICATION_ID" ]] || abrt "no notification id passed: $@"
+ID="$1"
+[[ "$ID" ]] || abrt "no notification id passed: $@"
 shift
 
-ACTION_COMMANDS=("$@")
-[[ "$ACTION_COMMANDS" ]] || abrt "no action commands passed: $@"
+a=("$@")
+[[ "$a" ]] || abrt "no action commands passed: $@"
 
-cleanup() {
-	rm -f "$GDBUS_MONITOR_PID"
-}
-
-create_pid_file(){
-	rm -f "$GDBUS_MONITOR_PID"
-	umask 077
-	touch "$GDBUS_MONITOR_PID"
-}
-
-invoke_action() {
+invoke_action () {
 	invoked_action_id="$1"
 	local action="" cmd=""
-	for index in "${!ACTION_COMMANDS[@]}"; do
+	for index in "${!a[@]}"; do
 		[[ $((index % 2)) == 0 ]] && {
-			action="${ACTION_COMMANDS[$index]}"
+			action="${a[$index]}"
 		} || {
-			cmd="${ACTION_COMMANDS[$index]}"
+			cmd="${a[$index]}"
 			[[ "$action" == "$invoked_action_id" ]] && {
 				bash -c "${cmd}" &
 			}
@@ -46,27 +36,29 @@ invoke_action() {
 	done
 }
 
-monitor() {
-	create_pid_file
-	( "${GDBUS_MONITOR[@]}" & echo $! >&3 ) 3>"$GDBUS_MONITOR_PID" | while read -r line
-	do
-		local closed_notification_id="$(sed '/^\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.NotificationClosed (uint32 \([0-9]\+\), uint32 [0-9]\+)$/!d;s//\1/' <<< "$line")"
-		[[ -n "$closed_notification_id" ]] && {
-			[[ "$closed_notification_id" == "$NOTIFICATION_ID" ]] && {
-				invoke_action close
-				break
-			}
-		} || {
-			local action_invoked="$(sed '/\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.ActionInvoked (uint32 \([0-9]\+\), '\''\(.*\)'\'')$/!d;s//\1:\2/' <<< "$line")"
-			IFS=: read invoked_id action_id <<< "$action_invoked"
-				[[ "$invoked_id" == "$NOTIFICATION_ID" ]] && {
-					invoke_action "$action_id"
-					break
-				}
-		}
-	done
-	kill $(<"$GDBUS_MONITOR_PID")
-	cleanup
+rm -f "$GDBUS_PIDF"
+umask 077
+touch "$GDBUS_PIDF"
+
+trap "cleanup" 0
+cleanup () {
+	kill $(<"$GDBUS_PIDF")
+	rm -f "$GDBUS_PIDF"
 }
 
-monitor
+( "${GDBUS_ARGS[@]}" & echo $! >&3 ) 3>"$GDBUS_PIDF" | while read -r line ;do
+	local closed_notification_id="$(sed '/^\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.NotificationClosed (uint32 \([0-9]\+\), uint32 [0-9]\+)$/!d;s//\1/' <<< "$line")"
+	[[ -n "$closed_notification_id" ]] && {
+		[[ "$closed_notification_id" == "$ID" ]] && {
+			invoke_action close
+			break
+		}
+	} || {
+		local action_invoked="$(sed '/\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.ActionInvoked (uint32 \([0-9]\+\), '\''\(.*\)'\'')$/!d;s//\1:\2/' <<< "$line")"
+		IFS=: read invoked_id action_id <<< "$action_invoked"
+			[[ "$invoked_id" == "$ID" ]] && {
+				invoke_action "$action_id"
+				break
+			}
+	}
+done

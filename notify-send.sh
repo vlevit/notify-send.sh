@@ -31,12 +31,18 @@ VERSION=1.1-bkw777
 ACTION_SH=${0%/*}/notify-action.sh
 NOTIFY_ARGS=(--session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
-EXPIRE_TIME=-1
-APP_NAME=${SELF}
-REPLACE_ID=0
-URGENCY=1
+typeset -i i=0 ID=0 EXPIRE_TIME=-1 URGENCY=1
+unset ID_FILE
+AKEYS=()
+ACMDS=()
 HINTS=()
-SUMMARY_SET=n
+APP_NAME=${SELF}
+PRINT_ID=false
+EXPLICIT_CLOSE=false
+SUMMARY=
+BODY=
+positional=false
+summary_set=false
 
 abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
 
@@ -116,28 +122,6 @@ parse_notification_id () {
 	sed 's/(uint32 \([0-9]\+\),)/\1/g'
 }
 
-notify () {
-	local actions="$(concat_actions "${ACTIONS[@]}")"
-	local hints="$(concat_hints "${HINTS[@]}")"
-
-	NOTIFICATION_ID=$(gdbus call "${NOTIFY_ARGS[@]}"  \
-		--method org.freedesktop.Notifications.Notify \
-		"$APP_NAME" "$REPLACE_ID" "$ICON" "$SUMMARY" "$BODY" \
-		"${actions}" "${hints}" "int32 $EXPIRE_TIME" \
-		| parse_notification_id)
-
-	[[ -n "$STORE_ID" ]] && echo "$NOTIFICATION_ID" > $STORE_ID
-
-	[[ -n "$PRINT_ID" ]] && echo "$NOTIFICATION_ID"
-
-	[[ -n "$FORCE_EXPIRE" ]] && {
-		type bc &> /dev/null || abrt "bc command not found. Please install bc package."
-		SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
-		( sleep "$SLEEP_TIME" ; notify_close "$NOTIFICATION_ID" ) &
-	}
-
-	maybe_run_action_handler
-}
 
 notify_close () {
 	gdbus call "${NOTIFY_ARGS[@]}"  --method org.freedesktop.Notifications.CloseNotification "$1" >/dev/null
@@ -168,26 +152,16 @@ process_hint () {
 	HINTS=("${HINTS[@]}" "$hint")
 }
 
-maybe_run_action_handler () {
-	[[ -n "$NOTIFICATION_ID" ]] && [[ -n "$ACTION_COMMANDS" ]] && {
-		[[ -x "$ACTION_SH" ]] && {
-			"$ACTION_SH" "$NOTIFICATION_ID" "${ACTION_COMMANDS[@]}" &
-			exit 0
-		} || {
-			abrt "executable file not found: $notify_action"
-		}
-	}
-}
 
 process_action () {
 	IFS=: read name command <<<"$1"
 	[[ "$name" ]] && [[ "$command" ]] || abrt "Invalid action syntax specified. Use NAME:COMMAND."
 
 	local action_key="$(make_action_key "$name")"
-	ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
+	ACTION_COMMANDS=("${ACMDS[@]}" "$action_key" "$command")
 
 	local action="$(make_action "$action_key" "$name")"
-	ACTIONS=("${ACTIONS[@]}" "$action")
+	ACTIONS=("${AKEYS[@]}" "$action")
 }
 
 process_special_action () {
@@ -196,94 +170,87 @@ process_special_action () {
 
 	[[ "$action_key" ]] && [[ "$command" ]] || abrt "Command must not be empty"
 
-	ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
+	ACMDS=("${ACMDS[@]}" "$action_key" "$command")
 
 	[[ "$action_key" != close ]] && {
 		local action="$(make_action "$action_key" "$name")"
-		ACTIONS=("${ACTIONS[@]}" "$action")
+		AKEYS=("${AKEYS[@]}" "$action")
 	}
 }
 
 process_posargs () {
-	[[ "$1" = -* ]] && ! [[ "$positional" = yes ]] && abrt "Unknown option $1"
-
-	[[ "$SUMMARY_SET" = n ]] && {
-		SUMMARY="$1"
-		SUMMARY_SET=y
-	} || {
-		BODY="$1"
-	}
+	[[ "${1}" = -* ]] && ! ${positional} && abrt "Unknown option ${1}"
+	${summary_set} && BODY=${1} || SUMMARY=${1} summary_set=true
 }
 
-while (( $# > 0 )) ; do
-	case "$1" in
+while ((${#})) ; do
+	s= i=0
+	case "${1}" in
 		-\?|--help)
 			help
 			exit 0
 			;;
 		-v|--version)
-			echo "${0##*/} $VERSION"
+			echo "${SELF} ${VERSION}"
 			exit 0
 			;;
 		-u|--urgency|--urgency=*)
-			[[ "$1" = --urgency=* ]] && urgency="${1#*=}" || { shift; urgency="$1"; }
-			process_urgency "$urgency"
+			[[ "${1}" = --urgency=* ]] && s=${1#*=} || { shift ;s=${1} ; }
+			process_urgency "${s}"
 			;;
 		-t|--expire-time|--expire-time=*)
-			[[ "$1" = --expire-time=* ]] && EXPIRE_TIME="${1#*=}" || { shift; EXPIRE_TIME="$1"; }
-			[[ "$EXPIRE_TIME" =~ ^-?[0-9]+$ ]] || abrt "Invalid expire time: ${EXPIRE_TIME}"
+			[[ "${1}" = --expire-time=* ]] && EXPIRE_TIME=${1#*=} || { shift ;EXPIRE_TIME=${1} ; }
 			;;
 		-f|--force-expire)
-			FORCE_EXPIRE=yes
+			export EXPLICIT_CLOSE=true
 			;;
 		-a|--app-name|--app-name=*)
-			[[ "$1" = --app-name=* ]] && APP_NAME="${1#*=}" || { shift; APP_NAME="$1"; }
+			[[ "${1}" = --app-name=* ]] && APP_NAME=${1#*=} || { shift ;APP_NAME=${1} ; }
 			export APP_NAME
 			;;
 		-i|--icon|--icon=*)
-			[[ "$1" = --icon=* ]] && ICON="${1#*=}" || { shift; ICON="$1"; }
+			[[ "${1}" = --icon=* ]] && ICON=${1#*=} || { shift ;ICON=${1} ; }
 			;;
 		-c|--category|--category=*)
-			[[ "$1" = --category=* ]] && category="${1#*=}" || { shift; category="$1"; }
-			process_category "$category"
+			[[ "${1}" = --category=* ]] && s=${1#*=} || { shift ;s=${1} ; }
+			process_category "${s}"
 			;;
 		-h|--hint|--hint=*)
-			[[ "$1" = --hint=* ]] && hint="${1#*=}" || { shift; hint="$1"; }
-			process_hint "$hint"
+			[[ "${1}" = --hint=* ]] && s=${1#*=} || { shift ;s=${1} ; }
+			process_hint "${s}"
 			;;
-		-o | --action | --action=*)
-			[[ "$1" == --action=* ]] && action="${1#*=}" || { shift; action="$1"; }
-			process_action "$action"
+		-o|--action|--action=*)
+			[[ "${1}" == --action=* ]] && s=${1#*=} || { shift ;s=${1} ; }
+			process_action "${s}"
 			;;
-		-d | --default-action | --default-action=*)
-			[[ "$1" == --default-action=* ]] && default_action="${1#*=}" || { shift; default_action="$1"; }
-			process_special_action default "$default_action"
+		-d|--default-action|--default-action=*)
+			[[ "${1}" == --default-action=* ]] && s=${1#*=} || { shift ;s=${1} ; }
+			process_special_action default "${s}"
 			;;
-		-l | --close-action | --close-action=*)
-			[[ "$1" == --close-action=* ]] && close_action="${1#*=}" || { shift; close_action="$1"; }
-			process_special_action close "$close_action"
+		-l|--close-action|--close-action=*)
+			[[ "${1}" == --close-action=* ]] && s=${1#*=} || { shift ;s=${1} ; }
+			process_special_action close "${s}"
 			;;
 		-p|--print-id)
-			PRINT_ID=yes
+			PRINT_ID=true
 			;;
 		-r|--replace|--replace=*)
-			[[ "$1" = --replace=* ]] && REPLACE_ID="${1#*=}" || { shift; REPLACE_ID="$1"; }
+			[[ "${1}" = --replace=* ]] && ID=${1#*=} || { shift ;ID=${1} ; }
 			;;
 		-R|--replace-file|--replace-file=*)
-			[[ "$1" = --replace-file=* ]] && filename="${1#*=}" || { shift; filename="$1"; }
-			[[ -s "$filename" ]] && REPLACE_ID="$(< $filename)"
-			STORE_ID="$filename"
+			[[ "${1}" = --replace-file=* ]] && ID_FILE=${1#*=} || { shift ;ID_FILE=${1} ; }
+			[[ -s ${ID_FILE} ]] && read ID < "${ID_FILE}"
 			;;
 		-s|--close|--close=*)
-			[[ "$1" = --close=* ]] && close_id="${1#*=}" || { shift; close_id="$1"; }
-			notify_close "$close_id"
-			exit $?
+			[[ "${1}" = --close=* ]] && i=${1#*=} || { shift ;i=${1} ; }
+			notify_close ${i}
+			exit ${?}
 			;;
 		--)
-			positional=yes
+			positional=true
 			;;
 		*)
-			process_posargs "$1"
+			process_posargs "${1}"
 			;;
 	esac
 	shift
@@ -292,9 +259,31 @@ done
 # urgency is always set
 HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
 
-[[ "$SUMMARY_SET" = n ]] && {
-	help
-	exit 1
-} || {
-	notify
+actions="$(concat_actions "${AKEYS[@]}")"
+hints="$(concat_hints "${HINTS[@]}")"
+
+ID=$(gdbus call "${NOTIFY_ARGS[@]}"  \
+	--method org.freedesktop.Notifications.Notify \
+	"$APP_NAME" "$ID" "$ICON" "$SUMMARY" "$BODY" \
+	"${actions}" "${hints}" "int32 $EXPIRE_TIME" \
+	| parse_notification_id)
+
+[[ "$STORE_ID" ]] && echo "$ID" > $STORE_ID
+
+${PRINT_ID} && echo "$ID"
+
+${EXPLICIT_CLOSE} && {
+	type bc &> /dev/null || abrt "bc command not found. Please install bc package."
+	SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
+	( sleep "$SLEEP_TIME" ; notify_close "$ID" ) &
 }
+
+[[ "$ID" ]] && [[ "$ACMDS" ]] && {
+	[[ -x "$ACTION_SH" ]] && {
+		"$ACTION_SH" "$ID" "${ACMDS[@]}" &
+		exit 0
+	} || {
+		abrt "executable file not found: $notify_action"
+	}
+}
+
