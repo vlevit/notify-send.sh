@@ -118,11 +118,6 @@ concat_hints () {
 	echo "{$result}"
 }
 
-parse_notification_id () {
-	sed 's/(uint32 \([0-9]\+\),)/\1/g'
-}
-
-
 notify_close () {
 	gdbus call "${NOTIFY_ARGS[@]}"  --method org.freedesktop.Notifications.CloseNotification "$1" >/dev/null
 }
@@ -263,15 +258,18 @@ actions="$(concat_actions "${AKEYS[@]}")"
 hints="$(concat_hints "${HINTS[@]}")"
 
 # send the dbus message, collect the notification ID
-ID=$(gdbus call "${NOTIFY_ARGS[@]}"  \
+typeset -i OLD_ID=${ID} NEW_ID=0
+s=$(gdbus call "${NOTIFY_ARGS[@]}"  \
 	--method org.freedesktop.Notifications.Notify \
 	"$APP_NAME" "$ID" "$ICON" "$SUMMARY" "$BODY" \
-	"${actions}" "${hints}" "int32 $EXPIRE_TIME" \
-	| parse_notification_id)
+	"${actions}" "${hints}" "int32 $EXPIRE_TIME")
 
 # process the ID
-[[ "$STORE_ID" ]] && echo "$ID" > $STORE_ID
-${PRINT_ID} && echo "$ID"
+s=${s%,*} NEW_ID=${s#* }
+((${NEW_ID}>0)) || abrt "invalid notification ID from gdbus"
+((${OLD_ID}>0)) || ID=${NEW_ID}
+[[ "${ID_FILE}" ]] && ((${OLD_ID}<1)) && echo ${ID} > "${ID_FILE}"
+${PRINT_ID} && echo ${ID}
 
 # bg task to monitor dbus and perform the actions
 [[ "$ID" ]] && [[ "$ACMDS" ]] && {
