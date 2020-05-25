@@ -15,12 +15,10 @@ GDBUS_ARGS=(gdbus monitor --session --dest org.freedesktop.Notifications --objec
 abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
 
 # consume the command line
-typeset -i ID="${1}"
-((${ID}>0)) || abrt "no notification id passed: $@"
-shift
-
-a=("$@")
-[[ "$a" ]] || abrt "no action commands passed: $@"
+typeset -i ID="${1}" ;shift
+((${ID}>0)) || abrt "no notification id"
+declare -A a ;while ((${#})) ;do a[${1}]=${2} ;shift 2 ;done
+((${#a[@]})) || abrt "no actions"
 
 [[ "${DISPLAY}" ]] || abrt "no DISPLAY"
 typeset -i i=0 p=0
@@ -53,18 +51,7 @@ conclude () {
 
 # execute an invoked command
 doit () {
-	invoked_action_id="$1"
-	local action="" cmd=""
-	for index in "${!a[@]}"; do
-		[[ $((index % 2)) == 0 ]] && {
-			action="${a[$index]}"
-		} || {
-			cmd="${a[$index]}"
-			[[ "$action" == "$invoked_action_id" ]] && {
-				bash -c "${cmd}" &
-			}
-		}
-	done
+	setsid -f ${a[${1}]} >&- 2>&- <&- &
 }
 
 # start the monitor
