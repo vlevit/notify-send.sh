@@ -56,7 +56,7 @@ doit () {
 }
 
 # start the monitor
-( "${GDBUS_ARGS[@]}" & echo $! >&3 ) 3>>"$GDBUS_PIDF" | while read -r line ;do
+{ "${GDBUS_ARGS[@]}" & echo ${!} >>"$GDBUS_PIDF" } | while read -r line ;do
 	typeset -i i="$(sed '/^\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.NotificationClosed (uint32 \([0-9]\+\), uint32 [0-9]\+)$/!d;s//\1/' <<< "$line")"
 	((${i}>0)) && {
 		((${i}==${ID})) && {
