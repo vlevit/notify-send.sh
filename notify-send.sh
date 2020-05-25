@@ -122,18 +122,18 @@ notify() {
 		"${actions}" "${hints}" "int32 $EXPIRE_TIME" \
 		| parse_notification_id)
 
-	if [[ -n "$STORE_ID" ]] ; then
+	[[ -n "$STORE_ID" ]] && {
 		echo "$NOTIFICATION_ID" > $STORE_ID
-	fi
-	if [[ -n "$PRINT_ID" ]] ; then
+	}
+	[[ -n "$PRINT_ID" ]] && {
 		echo "$NOTIFICATION_ID"
-	fi
+	}
 
-	if [[ -n "$FORCE_EXPIRE" ]] ; then
+	[[ -n "$FORCE_EXPIRE" ]] && {
 		type bc &> /dev/null || { echo "bc command not found. Please install bc package."; exit 1; }
 		SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
 		( sleep "$SLEEP_TIME" ; notify_close "$NOTIFICATION_ID" ) &
-	fi
+	}
 
 	maybe_run_action_handler
 }
@@ -163,37 +163,37 @@ process_category() {
 
 process_hint() {
 	IFS=: read type name command <<< "$1"
-	if [[ -z "$name" ]] || [[ -z "$command" ]] ; then
+	[[ -z "$name" ]] || [[ -z "$command" ]] && {
 		echo "Invalid hint syntax specified. Use TYPE:NAME:VALUE."
 		exit 1
-	fi
+	}
 	hint="$(make_hint "$type" "$name" "$command")"
-	if [[ ! $? = 0 ]] ; then
+	[[ ! $? = 0 ]] && {
 		echo "Invalid hint type \"$type\". Valid types are int, double, string and byte."
 		exit 1
-	fi
+	}
 	HINTS=("${HINTS[@]}" "$hint")
 }
 
 maybe_run_action_handler() {
-	if [[ -n "$NOTIFICATION_ID" ]] && [[ -n "$ACTION_COMMANDS" ]]; then
+	[[ -n "$NOTIFICATION_ID" ]] && [[ -n "$ACTION_COMMANDS" ]] && {
 		local notify_action="$(dirname ${BASH_SOURCE[0]})/notify-action.sh"
-		if [[ -x "$notify_action" ]] ; then
+		[[ -x "$notify_action" ]] && {
 			"$notify_action" "$NOTIFICATION_ID" "${ACTION_COMMANDS[@]}" &
 			exit 0
-		else
+		} || {
 			echo "executable file not found: $notify_action"
 			exit 1
-		fi
-	fi
+		}
+	}
 }
 
 process_action() {
 	IFS=: read name command <<<"$1"
-	if [[ -z "$name" ]] || [[ -z "$command" ]]; then
+	[[ -z "$name" ]] || [[ -z "$command" ]] && {
 		echo "Invalid action syntax specified. Use NAME:COMMAND."
 		exit 1
-	fi
+	}
 
 	local action_key="$(make_action_key "$name")"
 	ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
@@ -206,31 +206,31 @@ process_special_action() {
 	action_key="$1"
 	command="$2"
 
-	if [[ -z "$action_key" ]] || [[ -z "$command" ]]; then
+	[[ -z "$action_key" ]] || [[ -z "$command" ]] && {
 		echo "Command must not be empty"
 		exit 1
-	fi
+	}
 
 	ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
 
-	if [[ "$action_key" != close ]]; then
+	[[ "$action_key" != close ]] && {
 		local action="$(make_action "$action_key" "$name")"
 		ACTIONS=("${ACTIONS[@]}" "$action")
-	fi
+	}
 }
 
 process_posargs() {
-	if [[ "$1" = -* ]] && ! [[ "$positional" = yes ]] ; then
+	[[ "$1" = -* ]] && ! [[ "$positional" = yes ]] && {
 		echo "Unknown option $1"
 		exit 1
-	else
-		if [[ "$SUMMARY_SET" = n ]]; then
+	} || {
+		[[ "$SUMMARY_SET" = n ]] && {
 			SUMMARY="$1"
 			SUMMARY_SET=y
-		else
+		} || {
 			BODY="$1"
-		fi
-	fi
+		}
+	}
 }
 
 while (( $# > 0 )) ; do
@@ -249,10 +249,10 @@ while (( $# > 0 )) ; do
 			;;
 		-t|--expire-time|--expire-time=*)
 			[[ "$1" = --expire-time=* ]] && EXPIRE_TIME="${1#*=}" || { shift; EXPIRE_TIME="$1"; }
-			if ! [[ "$EXPIRE_TIME" =~ ^-?[0-9]+$ ]]; then
+			[[ "$EXPIRE_TIME" =~ ^-?[0-9]+$ ]] || {
 				echo "Invalid expire time: ${EXPIRE_TIME}"
 				exit 1;
-			fi
+			}
 			;;
 		-f|--force-expire)
 			FORCE_EXPIRE=yes
@@ -314,9 +314,9 @@ done
 # urgency is always set
 HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
 
-if [[ "$SUMMARY_SET" = n ]] ; then
+[[ "$SUMMARY_SET" = n ]] && {
 	help
 	exit 1
-else
+} || {
 	notify
-fi
+}
