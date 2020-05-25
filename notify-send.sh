@@ -100,7 +100,7 @@ make_hint () {
 	_r="" ;local t=${1} n=${2} c=${3}
 	[[ ${t} =~ ^(byte|int32|double|string)$ ]] || abrt "Hint types: byte int32 double string"
 	[[ ${t} = string ]] && c="\"${3}\""
-	_r="\"${n}\": <${t} ${c}>"
+	_r="\"${n}\":<${t} ${c}>"
 }
 
 process_hint () {

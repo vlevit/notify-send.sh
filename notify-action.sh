@@ -10,7 +10,7 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 
 SEND_SH=${0%/*}/notify-send.sh
 GDBUS_PIDF=${TMP}/${APP_NAME:=${SELF}}.${$}.p
-GDBUS_ARGS=(gdbus monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
+GDBUS_ARGS=(monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
 abrt () { echo "${SELF}: ${@}" >&2 ; exit 1 ; }
 
@@ -56,19 +56,13 @@ doit () {
 }
 
 # start the monitor
-{ "${GDBUS_ARGS[@]}" & echo ${!} >>"$GDBUS_PIDF" } | while read -r line ;do
-	typeset -i i="$(sed '/^\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.NotificationClosed (uint32 \([0-9]\+\), uint32 [0-9]\+)$/!d;s//\1/' <<< "$line")"
-	((${i}>0)) && {
-		((${i}==${ID})) && {
-			doit close
-			break
-		}
-	} || {
-		s="$(sed '/\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.ActionInvoked (uint32 \([0-9]\+\), '\''\(.*\)'\'')$/!d;s//\1:\2/' <<< "$line")"
-		IFS=: read i k <<< "${s}"
-			((${i}==${ID})) && {
-				doit "${k}"
-				break
-			}
-	}
+{
+	gdbus ${GDBUS_ARGS[@]} & echo ${!} >> "${GDBUS_PIDF}"
+} |while IFS=" :.(),'" read x x x x e x i x k x ;do
+	((${i}==${ID})) || continue
+	case "${e}" in
+		"NotificationClosed") doit "close" ;;
+		"ActionInvoked") doit "${k}" ;;
+	esac
+	break
 done
