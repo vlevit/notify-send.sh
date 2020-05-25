@@ -28,9 +28,11 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 }
 
 VERSION=1.1-bkw777
+ACTION_SH=${0%/*}/notify-action.sh
 NOTIFY_ARGS=(--session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
+
 EXPIRE_TIME=-1
-APP_NAME="${0##*/}"
+APP_NAME=${SELF}
 REPLACE_ID=0
 URGENCY=1
 HINTS=()
@@ -168,9 +170,8 @@ process_hint () {
 
 maybe_run_action_handler () {
 	[[ -n "$NOTIFICATION_ID" ]] && [[ -n "$ACTION_COMMANDS" ]] && {
-		local notify_action="$(dirname ${BASH_SOURCE[0]})/notify-action.sh"
-		[[ -x "$notify_action" ]] && {
-			"$notify_action" "$NOTIFICATION_ID" "${ACTION_COMMANDS[@]}" &
+		[[ -x "$ACTION_SH" ]] && {
+			"$ACTION_SH" "$NOTIFICATION_ID" "${ACTION_COMMANDS[@]}" &
 			exit 0
 		} || {
 			abrt "executable file not found: $notify_action"
@@ -237,6 +238,7 @@ while (( $# > 0 )) ; do
 			;;
 		-a|--app-name|--app-name=*)
 			[[ "$1" = --app-name=* ]] && APP_NAME="${1#*=}" || { shift; APP_NAME="$1"; }
+			export APP_NAME
 			;;
 		-i|--icon|--icon=*)
 			[[ "$1" = --icon=* ]] && ICON="${1#*=}" || { shift; ICON="$1"; }

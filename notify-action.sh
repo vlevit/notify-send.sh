@@ -8,7 +8,8 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 	trap "set >&2" 0
 }
 
-GDBUS_MONITOR_PID=/tmp/notify-action-dbus-monitor.$$.pid
+SEND_SH=${0%/*}/notify-send.sh
+GDBUS_MONITOR_PID=${TMP}/${APP_NAME:=${SELF}}.${$}.p
 GDBUS_MONITOR=(gdbus monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
 abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
