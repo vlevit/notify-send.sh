@@ -1,3 +1,10 @@
+This is a fork of https://github.com/vlevit/notify-send.sh
+The main purpose and differences are:
+* Refactored to remove all the unnecessary external tools (dc, bc, sed), <<< here-docs (which create temp files behind the scenes), subshells (all but one use of foo=$(foo ...) could have been done with direct variables and saved a bunch of forks (and now are), and generally optimize and tighten the code aside from those issues.
+* Improve the handling of actions. For a lengthy description, see:
+  https://github.com/bkw777/mainline/blob/master/lib/notify_send/mainline_changes.txt
+* Also a lot of admittedly gratuitous stylistic changes because I just prefer short variable names except where actually useful, and prefer foo && { stuff } vs if foo ;then stuff ;fi  etc
+
 # notify-send.sh
 
 notify-send.sh is a drop-in replacement for notify-send (from
@@ -9,10 +16,6 @@ In Debian and Ubuntu you can ensure all dependencies are installed
 with the following command:
 
     $ sudo apt-get install bash libglib2.0-bin
-
-For Arch Linux users notify-send.sh is available in [AUR].
-
-[AUR]: https://aur.archlinux.org/packages/notify-send.sh/
 
 ## Usage
 
