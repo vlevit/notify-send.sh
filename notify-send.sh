@@ -119,7 +119,8 @@ concat_hints () {
 }
 
 notify_close () {
-	gdbus call "${NOTIFY_ARGS[@]}"  --method org.freedesktop.Notifications.CloseNotification "$1" >/dev/null
+	i=${2} ;((${i}>0)) && sleep ${i:0:-3}.${i:$((${#i}-3))}
+	gdbus call "${NOTIFY_ARGS[@]}" --method org.freedesktop.Notifications.CloseNotification "${1}" >/dev/null
 }
 
 process_urgency () {
@@ -239,7 +240,7 @@ while ((${#})) ; do
 			;;
 		-s|--close|--close=*)
 			[[ "${1}" = --close=* ]] && i=${1#*=} || { shift ;i=${1} ; }
-			notify_close ${i}
+			((${i}>0)) && notify_close ${i} ${EXPIRE_TIME}
 			exit ${?}
 			;;
 		--)
@@ -275,8 +276,4 @@ ${PRINT_ID} && echo ${ID}
 ((${#ACMDS[@]}>0)) && setsid -f "${ACTION_SH}" ${ID} "${ACMDS[@]}" >&- 2>&- &
 
 # bg task to wait expire time and then actively close notification
-${EXPLICIT_CLOSE} && {
-	type bc &> /dev/null || abrt "bc command not found. Please install bc package."
-	SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
-	( sleep "$SLEEP_TIME" ; notify_close "$ID" ) &
-}
+${EXPLICIT_CLOSE} && ((${EXPIRE_TIME}>0)) && setsid -f "${0}" -t ${EXPIRE_TIME} -s ${ID} >&- 2>&- <&- &
