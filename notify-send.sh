@@ -75,49 +75,29 @@ Application Options:
 EOF
 }
 
-make_hint () {
-	type=${1} name=${2} command="${3}"
-	[[ "$type" = string ]] && command="\"${3}\""
-	echo "\"${name}\": <${type} ${command}>"
-}
-
-concat_hints () {
-	local result="$1"
-	shift
-	for s in "$@"; do
-		result="$result, $s"
-	done
-	echo "{$result}"
-}
-
 notify_close () {
 	i=${2} ;((${i}>0)) && sleep ${i:0:-3}.${i:$((${#i}-3))}
 	gdbus call "${NOTIFY_ARGS[@]}" --method org.freedesktop.Notifications.CloseNotification "${1}" >/dev/null
 }
 
-process_urgency () {
-	case "$1" in
-		0|low) URGENCY=0 ;;
-		1|normal) URGENCY=1 ;;
-		2|critical) URGENCY=2 ;;
-		*) abrt "Urgency values: 0 low 1 normal 2 critical" ;;
-	esac
+make_hint () {
+	_r="" ;local t=${1} n=${2} c=${3}
+	[[ ${t} =~ ^(byte|int32|double|string)$ ]] || abrt "Hint types: byte int32 double string"
+	[[ ${t} = string ]] && c="\"${3}\""
+	_r="\"${n}\": <${t} ${c}>"
 }
 
 process_category () {
-	IFS=, read -a categories <<< "$1"
-	for category in "${categories[@]}"; do
-		hint="$(make_hint string category "$category")"
-		HINTS=("${HINTS[@]}" "$hint")
+	local a c ;IFS=, a=(${1})
+	for c in "${a[@]}"; do
+		make_hint string category "${c}" && HINTS+=(${_r})
 	done
 }
 
 process_hint () {
-	IFS=: read type name command <<< "$1"
-	[[ "$name" ]] && [[ "$command" ]] || abrt "Invalid hint syntax specified. Use TYPE:NAME:VALUE."
-	hint="$(make_hint "$type" "$name" "$command")"
-	[[ $? = 0 ]] || abrt "Invalid hint type \"$type\". Valid types are int, double, string and byte."
-	HINTS=("${HINTS[@]}" "$hint")
+	local a ;IFS=: a=(${1})
+	((${#a[@]}==3)) || abrt "Hint syntax: \"TYPE:NAME:VALUE\""
+	make_hint "${a[0]}" "${a[1]}" "${a[2]}" && HINTS+=(${_r})
 }
 
 process_action () {
@@ -217,15 +197,15 @@ done
 
 # build the actions & hints strings
 a= ;for s in "${AKEYS[@]}" ;do a+=,${s} ;done ;a=${a:1}
-HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
-hints="$(concat_hints "${HINTS[@]}")"
+make_hint byte urgency "${URGENCY}" ;h=${_r}
+for s in "${HINTS[@]}" ;do h+=,${s} ;done
 
 # send the dbus message, collect the notification ID
 typeset -i OLD_ID=${ID} NEW_ID=0
 s=$(gdbus call "${NOTIFY_ARGS[@]}"  \
 	--method org.freedesktop.Notifications.Notify \
 	"$APP_NAME" "$ID" "$ICON" "$SUMMARY" "$BODY" \
-	"[${a}]" "${hints}" "int32 $EXPIRE_TIME")
+	"[${a}]" "{${h}}" "int32 $EXPIRE_TIME")
 
 # process the ID
 s=${s%,*} NEW_ID=${s#* }
