@@ -152,7 +152,6 @@ process_hint () {
 	HINTS=("${HINTS[@]}" "$hint")
 }
 
-
 process_action () {
 	IFS=: read name command <<<"$1"
 	[[ "$name" ]] && [[ "$command" ]] || abrt "Invalid action syntax specified. Use NAME:COMMAND."
@@ -164,6 +163,8 @@ process_action () {
 	ACTIONS=("${AKEYS[@]}" "$action")
 }
 
+# key=default: key:command and key:label, with empty label
+# key=close:   key:command, no key:label (no button for the on-close event)
 process_special_action () {
 	action_key="$1"
 	command="$2"
@@ -256,28 +257,23 @@ while ((${#})) ; do
 	shift
 done
 
-# urgency is always set
+# build the actions & hints strings
 HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
-
 actions="$(concat_actions "${AKEYS[@]}")"
 hints="$(concat_hints "${HINTS[@]}")"
 
+# send the dbus message, collect the notification ID
 ID=$(gdbus call "${NOTIFY_ARGS[@]}"  \
 	--method org.freedesktop.Notifications.Notify \
 	"$APP_NAME" "$ID" "$ICON" "$SUMMARY" "$BODY" \
 	"${actions}" "${hints}" "int32 $EXPIRE_TIME" \
 	| parse_notification_id)
 
+# process the ID
 [[ "$STORE_ID" ]] && echo "$ID" > $STORE_ID
-
 ${PRINT_ID} && echo "$ID"
 
-${EXPLICIT_CLOSE} && {
-	type bc &> /dev/null || abrt "bc command not found. Please install bc package."
-	SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
-	( sleep "$SLEEP_TIME" ; notify_close "$ID" ) &
-}
-
+# bg task to monitor dbus and perform the actions
 [[ "$ID" ]] && [[ "$ACMDS" ]] && {
 	[[ -x "$ACTION_SH" ]] && {
 		"$ACTION_SH" "$ID" "${ACMDS[@]}" &
@@ -287,3 +283,9 @@ ${EXPLICIT_CLOSE} && {
 	}
 }
 
+# bg task to wait expire time and then actively close notification
+${EXPLICIT_CLOSE} && {
+	type bc &> /dev/null || abrt "bc command not found. Please install bc package."
+	SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
+	( sleep "$SLEEP_TIME" ; notify_close "$ID" ) &
+}
