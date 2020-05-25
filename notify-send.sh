@@ -43,6 +43,7 @@ SUMMARY=
 BODY=
 positional=false
 summary_set=false
+_r=
 
 abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
 
@@ -74,23 +75,10 @@ Application Options:
 EOF
 }
 
-make_action () {
-	printf "\"%d\",\"%q\"\n" ${1} "${2}"
-}
-
 make_hint () {
 	type=${1} name=${2} command="${3}"
 	[[ "$type" = string ]] && command="\"${3}\""
 	echo "\"${name}\": <${type} ${command}>"
-}
-
-concat_actions () {
-	local result="$1"
-	shift
-	for s in "$@"; do
-		result="$result, $s"
-	done
-	echo "[$result]"
 }
 
 concat_hints () {
@@ -133,30 +121,19 @@ process_hint () {
 }
 
 process_action () {
-	IFS=: read name command <<<"$1"
-	[[ "$name" ]] && [[ "$command" ]] || abrt "Invalid action syntax specified. Use NAME:COMMAND."
-
-	local k=${#AKEYS[@]}
-	ACMDS=("${ACMDS[@]}" ${k} "$command")
-
-	local action="$(make_action ${k} "$name")"
-	AKEYS=("${AKEYS[@]}" "$action")
+	local a k ;IFS=: a=(${1})
+	((${#a[@]}==2)) || abrt "Action syntax: \"NAME:COMMAND\""
+	k=${#AKEYS[@]}
+	AKEYS+=("\"${k}\",\"${a[0]}\"")
+	ACMDS+=("${k}" "${a[1]}")
 }
 
 # key=default: key:command and key:label, with empty label
 # key=close:   key:command, no key:label (no button for the on-close event)
 process_special_action () {
-	action_key="$1"
-	command="$2"
-
-	[[ "$action_key" ]] && [[ "$command" ]] || abrt "Command must not be empty"
-
-	ACMDS=("${ACMDS[@]}" "$action_key" "$command")
-
-	[[ "$action_key" != close ]] && {
-		local action="$(make_action "$action_key" "$name")"
-		AKEYS=("${AKEYS[@]}" "$action")
-	}
+	[[ "${2}" ]] || abrt "Command must not be empty"
+	[[ "${1}" != "close" ]] && AKEYS+=("\"${1}\",\"\"")
+	ACMDS+=("${1}" "${2}")
 }
 
 process_posargs () {
@@ -239,8 +216,8 @@ while ((${#})) ; do
 done
 
 # build the actions & hints strings
+a= ;for s in "${AKEYS[@]}" ;do a+=,${s} ;done ;a=${a:1}
 HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
-actions="$(concat_actions "${AKEYS[@]}")"
 hints="$(concat_hints "${HINTS[@]}")"
 
 # send the dbus message, collect the notification ID
@@ -248,7 +225,7 @@ typeset -i OLD_ID=${ID} NEW_ID=0
 s=$(gdbus call "${NOTIFY_ARGS[@]}"  \
 	--method org.freedesktop.Notifications.Notify \
 	"$APP_NAME" "$ID" "$ICON" "$SUMMARY" "$BODY" \
-	"${actions}" "${hints}" "int32 $EXPIRE_TIME")
+	"[${a}]" "${hints}" "int32 $EXPIRE_TIME")
 
 # process the ID
 s=${s%,*} NEW_ID=${s#* }
