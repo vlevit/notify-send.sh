@@ -74,24 +74,14 @@ Application Options:
 EOF
 }
 
-convert_type () {
-	case "$1" in
-		int) echo int32 ;;
-		double|string|byte) echo "$1" ;;
-		*) echo error; return 1 ;;
-	esac
-}
-
 make_action () {
 	printf "\"%d\",\"%q\"\n" ${1} "${2}"
 }
 
 make_hint () {
-	type=$(convert_type "$1")
-	[[ ! $? = 0 ]] && return 1
-	name="$2"
-	[[ "$type" = string ]] && command="\"$3\"" || command="$3"
-	echo "\"$name\": <$type $command>"
+	type=${1} name=${2} command="${3}"
+	[[ "$type" = string ]] && command="\"${3}\""
+	echo "\"${name}\": <${type} ${command}>"
 }
 
 concat_actions () {
@@ -119,10 +109,10 @@ notify_close () {
 
 process_urgency () {
 	case "$1" in
-		low) URGENCY=0 ;;
-		normal) URGENCY=1 ;;
-		critical) URGENCY=2 ;;
-		*) abrt "Unknown urgency $URGENCY specified. Known urgency levels: low, normal, critical." ;;
+		0|low) URGENCY=0 ;;
+		1|normal) URGENCY=1 ;;
+		2|critical) URGENCY=2 ;;
+		*) abrt "Urgency values: 0 low 1 normal 2 critical" ;;
 	esac
 }
 
