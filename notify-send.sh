@@ -272,14 +272,7 @@ s=${s%,*} NEW_ID=${s#* }
 ${PRINT_ID} && echo ${ID}
 
 # bg task to monitor dbus and perform the actions
-[[ "$ID" ]] && [[ "$ACMDS" ]] && {
-	[[ -x "$ACTION_SH" ]] && {
-		"$ACTION_SH" "$ID" "${ACMDS[@]}" &
-		exit 0
-	} || {
-		abrt "executable file not found: $notify_action"
-	}
-}
+((${#ACMDS[@]}>0)) && setsid -f "${ACTION_SH}" ${ID} "${ACMDS[@]}" >&- 2>&- &
 
 # bg task to wait expire time and then actively close notification
 ${EXPLICIT_CLOSE} && {
