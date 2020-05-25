@@ -240,6 +240,7 @@ while ((${#})) ; do
 			;;
 		-s|--close|--close=*)
 			[[ "${1}" = --close=* ]] && i=${1#*=} || { shift ;i=${1} ; }
+			((${i}<1)) && ((${ID}>0)) && i=${ID}
 			((${i}>0)) && notify_close ${i} ${EXPIRE_TIME}
 			exit ${?}
 			;;
