@@ -36,7 +36,9 @@ URGENCY=1
 HINTS=()
 SUMMARY_SET=n
 
-help() {
+abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
+
+help () {
 	cat <<EOF
 Usage:
   notify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification
@@ -64,7 +66,7 @@ Application Options:
 EOF
 }
 
-convert_type() {
+convert_type () {
 	case "$1" in
 		int) echo int32 ;;
 		double|string|byte) echo "$1" ;;
@@ -72,17 +74,17 @@ convert_type() {
 	esac
 }
 
-make_action_key() {
+make_action_key () {
 	echo "$(tr -dc _A-Z-a-z-0-9 <<< \"$1\")${RANDOM}"
 }
 
-make_action() {
+make_action () {
 	local action_key="$1"
 	printf -v text "%q" "$2"
 	echo "\"$action_key\", \"$text\""
 }
 
-make_hint() {
+make_hint () {
 	type=$(convert_type "$1")
 	[[ ! $? = 0 ]] && return 1
 	name="$2"
@@ -90,7 +92,7 @@ make_hint() {
 	echo "\"$name\": <$type $command>"
 }
 
-concat_actions() {
+concat_actions () {
 	local result="$1"
 	shift
 	for s in "$@"; do
@@ -99,7 +101,7 @@ concat_actions() {
 	echo "[$result]"
 }
 
-concat_hints() {
+concat_hints () {
 	local result="$1"
 	shift
 	for s in "$@"; do
@@ -108,11 +110,11 @@ concat_hints() {
 	echo "{$result}"
 }
 
-parse_notification_id(){
+parse_notification_id () {
 	sed 's/(uint32 \([0-9]\+\),)/\1/g'
 }
 
-notify() {
+notify () {
 	local actions="$(concat_actions "${ACTIONS[@]}")"
 	local hints="$(concat_hints "${HINTS[@]}")"
 
@@ -122,15 +124,12 @@ notify() {
 		"${actions}" "${hints}" "int32 $EXPIRE_TIME" \
 		| parse_notification_id)
 
-	[[ -n "$STORE_ID" ]] && {
-		echo "$NOTIFICATION_ID" > $STORE_ID
-	}
-	[[ -n "$PRINT_ID" ]] && {
-		echo "$NOTIFICATION_ID"
-	}
+	[[ -n "$STORE_ID" ]] && echo "$NOTIFICATION_ID" > $STORE_ID
+
+	[[ -n "$PRINT_ID" ]] && echo "$NOTIFICATION_ID"
 
 	[[ -n "$FORCE_EXPIRE" ]] && {
-		type bc &> /dev/null || { echo "bc command not found. Please install bc package."; exit 1; }
+		type bc &> /dev/null || abrt "bc command not found. Please install bc package."
 		SLEEP_TIME="$(bc <<< "scale=3; $EXPIRE_TIME / 1000")"
 		( sleep "$SLEEP_TIME" ; notify_close "$NOTIFICATION_ID" ) &
 	}
@@ -142,18 +141,16 @@ notify_close () {
 	gdbus call "${NOTIFY_ARGS[@]}"  --method org.freedesktop.Notifications.CloseNotification "$1" >/dev/null
 }
 
-process_urgency() {
+process_urgency () {
 	case "$1" in
 		low) URGENCY=0 ;;
 		normal) URGENCY=1 ;;
 		critical) URGENCY=2 ;;
-		*) echo "Unknown urgency $URGENCY specified. Known urgency levels: low, normal, critical."
-			exit 1
-			;;
+		*) abrt "Unknown urgency $URGENCY specified. Known urgency levels: low, normal, critical." ;;
 	esac
 }
 
-process_category() {
+process_category () {
 	IFS=, read -a categories <<< "$1"
 	for category in "${categories[@]}"; do
 		hint="$(make_hint string category "$category")"
@@ -161,39 +158,29 @@ process_category() {
 	done
 }
 
-process_hint() {
+process_hint () {
 	IFS=: read type name command <<< "$1"
-	[[ -z "$name" ]] || [[ -z "$command" ]] && {
-		echo "Invalid hint syntax specified. Use TYPE:NAME:VALUE."
-		exit 1
-	}
+	[[ "$name" ]] && [[ "$command" ]] || abrt "Invalid hint syntax specified. Use TYPE:NAME:VALUE."
 	hint="$(make_hint "$type" "$name" "$command")"
-	[[ ! $? = 0 ]] && {
-		echo "Invalid hint type \"$type\". Valid types are int, double, string and byte."
-		exit 1
-	}
+	[[ $? = 0 ]] || abrt "Invalid hint type \"$type\". Valid types are int, double, string and byte."
 	HINTS=("${HINTS[@]}" "$hint")
 }
 
-maybe_run_action_handler() {
+maybe_run_action_handler () {
 	[[ -n "$NOTIFICATION_ID" ]] && [[ -n "$ACTION_COMMANDS" ]] && {
 		local notify_action="$(dirname ${BASH_SOURCE[0]})/notify-action.sh"
 		[[ -x "$notify_action" ]] && {
 			"$notify_action" "$NOTIFICATION_ID" "${ACTION_COMMANDS[@]}" &
 			exit 0
 		} || {
-			echo "executable file not found: $notify_action"
-			exit 1
+			abrt "executable file not found: $notify_action"
 		}
 	}
 }
 
-process_action() {
+process_action () {
 	IFS=: read name command <<<"$1"
-	[[ -z "$name" ]] || [[ -z "$command" ]] && {
-		echo "Invalid action syntax specified. Use NAME:COMMAND."
-		exit 1
-	}
+	[[ "$name" ]] && [[ "$command" ]] || abrt "Invalid action syntax specified. Use NAME:COMMAND."
 
 	local action_key="$(make_action_key "$name")"
 	ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
@@ -202,14 +189,11 @@ process_action() {
 	ACTIONS=("${ACTIONS[@]}" "$action")
 }
 
-process_special_action() {
+process_special_action () {
 	action_key="$1"
 	command="$2"
 
-	[[ -z "$action_key" ]] || [[ -z "$command" ]] && {
-		echo "Command must not be empty"
-		exit 1
-	}
+	[[ "$action_key" ]] && [[ "$command" ]] || abrt "Command must not be empty"
 
 	ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
 
@@ -219,17 +203,14 @@ process_special_action() {
 	}
 }
 
-process_posargs() {
-	[[ "$1" = -* ]] && ! [[ "$positional" = yes ]] && {
-		echo "Unknown option $1"
-		exit 1
+process_posargs () {
+	[[ "$1" = -* ]] && ! [[ "$positional" = yes ]] && abrt "Unknown option $1"
+
+	[[ "$SUMMARY_SET" = n ]] && {
+		SUMMARY="$1"
+		SUMMARY_SET=y
 	} || {
-		[[ "$SUMMARY_SET" = n ]] && {
-			SUMMARY="$1"
-			SUMMARY_SET=y
-		} || {
-			BODY="$1"
-		}
+		BODY="$1"
 	}
 }
 
@@ -249,10 +230,7 @@ while (( $# > 0 )) ; do
 			;;
 		-t|--expire-time|--expire-time=*)
 			[[ "$1" = --expire-time=* ]] && EXPIRE_TIME="${1#*=}" || { shift; EXPIRE_TIME="$1"; }
-			[[ "$EXPIRE_TIME" =~ ^-?[0-9]+$ ]] || {
-				echo "Invalid expire time: ${EXPIRE_TIME}"
-				exit 1;
-			}
+			[[ "$EXPIRE_TIME" =~ ^-?[0-9]+$ ]] || abrt "Invalid expire time: ${EXPIRE_TIME}"
 			;;
 		-f|--force-expire)
 			FORCE_EXPIRE=yes
@@ -291,9 +269,7 @@ while (( $# > 0 )) ; do
 			;;
 		-R|--replace-file|--replace-file=*)
 			[[ "$1" = --replace-file=* ]] && filename="${1#*=}" || { shift; filename="$1"; }
-			if [[ -s "$filename" ]]; then
-				REPLACE_ID="$(< $filename)"
-			fi
+			[[ -s "$filename" ]] && REPLACE_ID="$(< $filename)"
 			STORE_ID="$filename"
 			;;
 		-s|--close|--close=*)

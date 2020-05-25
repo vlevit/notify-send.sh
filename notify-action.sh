@@ -11,18 +11,14 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 GDBUS_MONITOR_PID=/tmp/notify-action-dbus-monitor.$$.pid
 GDBUS_MONITOR=(gdbus monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
+abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
+
 NOTIFICATION_ID="$1"
-[[ -z "$NOTIFICATION_ID" ]] && {
-	echo "no notification id passed: $@"
-	exit 1;
-}
+[[ "$NOTIFICATION_ID" ]] || abrt "no notification id passed: $@"
 shift
 
 ACTION_COMMANDS=("$@")
-[[ -z "$ACTION_COMMANDS" ]] && {
-	echo "no action commands passed: $@"
-	exit 1;
-}
+[[ "$ACTION_COMMANDS" ]] || abrt "no action commands passed: $@"
 
 cleanup() {
 	rm -f "$GDBUS_MONITOR_PID"
