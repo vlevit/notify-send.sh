@@ -22,15 +22,33 @@ shift
 a=("$@")
 [[ "$a" ]] || abrt "no action commands passed: $@"
 
+[[ "${DISPLAY}" ]] || abrt "no DISPLAY"
+typeset -i i=0 p=0
+set +H
+shopt -s extglob
 
-rm -f "$GDBUS_PIDF"
-umask 077
-touch "$GDBUS_PIDF"
+# kill obsolete monitors (now)
+echo -n "${DISPLAY} ${ID} " > "${GDBUS_PIDF}"
+for f in ${TMP}/${APP_NAME}.+([0-9]).p ;do
+	[[ -s ${f} ]] || continue
+	[[ ${f} -ot ${GDBUS_PIDF} ]] || continue
+	read d i p x < ${f}
+	[[ "${d}" == "${DISPLAY}" ]] || continue
+	((${i}==${ID})) || continue
+	((${p}>1)) || continue
+	rm -f "${f}"
+	kill ${p}
+done
 
-trap "cleanup" 0
-cleanup () {
-	kill $(<"$GDBUS_PIDF")
-	rm -f "$GDBUS_PIDF"
+# kill current monitor (on exit)
+trap "conclude" 0
+conclude () {
+	${DEBUG_NOTIFY_SEND} && set >&2
+	[[ -s ${GDBUS_PIDF} ]] || exit 0
+	read d i p x < "${GDBUS_PIDF}"
+	rm -f "${GDBUS_PIDF}"
+	((${p}>1)) || exit
+	kill ${p}
 }
 
 # execute an invoked command
@@ -50,7 +68,7 @@ doit () {
 }
 
 # start the monitor
-( "${GDBUS_ARGS[@]}" & echo $! >&3 ) 3>"$GDBUS_PIDF" | while read -r line ;do
+( "${GDBUS_ARGS[@]}" & echo $! >&3 ) 3>>"$GDBUS_PIDF" | while read -r line ;do
 	typeset -i i="$(sed '/^\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.NotificationClosed (uint32 \([0-9]\+\), uint32 [0-9]\+)$/!d;s//\1/' <<< "$line")"
 	((${i}>0)) && {
 		((${i}==${ID})) && {

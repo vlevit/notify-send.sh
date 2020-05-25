@@ -82,14 +82,8 @@ convert_type () {
 	esac
 }
 
-make_action_key () {
-	echo "$(tr -dc _A-Z-a-z-0-9 <<< \"$1\")${RANDOM}"
-}
-
 make_action () {
-	local action_key="$1"
-	printf -v text "%q" "$2"
-	echo "\"$action_key\", \"$text\""
+	printf "\"%d\",\"%q\"\n" ${1} "${2}"
 }
 
 make_hint () {
@@ -152,10 +146,10 @@ process_action () {
 	IFS=: read name command <<<"$1"
 	[[ "$name" ]] && [[ "$command" ]] || abrt "Invalid action syntax specified. Use NAME:COMMAND."
 
-	local action_key="$(make_action_key "$name")"
-	ACMDS=("${ACMDS[@]}" "$action_key" "$command")
+	local k=${#AKEYS[@]}
+	ACMDS=("${ACMDS[@]}" ${k} "$command")
 
-	local action="$(make_action "$action_key" "$name")"
+	local action="$(make_action ${k} "$name")"
 	AKEYS=("${AKEYS[@]}" "$action")
 }
 
