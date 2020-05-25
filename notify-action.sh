@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+SELF=${0##*/}
+TMP=${XDG_RUNTIME_DIR:-/tmp}
+${DEBUG_NOTIFY_SEND:=false} && {
+	exec 2>"${TMP}/.${SELF}.${$}.e"
+	set -x
+	trap "set >&2" 0
+}
+
 GDBUS_MONITOR_PID=/tmp/notify-action-dbus-monitor.$$.pid
 GDBUS_MONITOR=(gdbus monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
