@@ -52,6 +52,7 @@ conclude () {
 # execute an invoked command
 doit () {
 	setsid -f ${a[${1}]} >&- 2>&- <&- &
+	${EXPLICIT_CLOSE:-false} && "${SEND_SH}" -s ${ID}
 }
 
 # start the monitor
