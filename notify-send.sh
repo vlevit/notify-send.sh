@@ -153,10 +153,10 @@ process_action () {
 	[[ "$name" ]] && [[ "$command" ]] || abrt "Invalid action syntax specified. Use NAME:COMMAND."
 
 	local action_key="$(make_action_key "$name")"
-	ACTION_COMMANDS=("${ACMDS[@]}" "$action_key" "$command")
+	ACMDS=("${ACMDS[@]}" "$action_key" "$command")
 
 	local action="$(make_action "$action_key" "$name")"
-	ACTIONS=("${AKEYS[@]}" "$action")
+	AKEYS=("${AKEYS[@]}" "$action")
 }
 
 # key=default: key:command and key:label, with empty label

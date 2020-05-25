@@ -15,8 +15,8 @@ GDBUS_ARGS=(gdbus monitor --session --dest org.freedesktop.Notifications --objec
 abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
 
 # consume the command line
-ID="$1"
-[[ "$ID" ]] || abrt "no notification id passed: $@"
+typeset -i ID="${1}"
+((${ID}>0)) || abrt "no notification id passed: $@"
 shift
 
 a=("$@")
@@ -51,17 +51,17 @@ doit () {
 
 # start the monitor
 ( "${GDBUS_ARGS[@]}" & echo $! >&3 ) 3>"$GDBUS_PIDF" | while read -r line ;do
-	local closed_notification_id="$(sed '/^\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.NotificationClosed (uint32 \([0-9]\+\), uint32 [0-9]\+)$/!d;s//\1/' <<< "$line")"
-	[[ -n "$closed_notification_id" ]] && {
-		[[ "$closed_notification_id" == "$ID" ]] && {
+	typeset -i i="$(sed '/^\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.NotificationClosed (uint32 \([0-9]\+\), uint32 [0-9]\+)$/!d;s//\1/' <<< "$line")"
+	((${i}>0)) && {
+		((${i}==${ID})) && {
 			doit close
 			break
 		}
 	} || {
-		local action_invoked="$(sed '/\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.ActionInvoked (uint32 \([0-9]\+\), '\''\(.*\)'\'')$/!d;s//\1:\2/' <<< "$line")"
-		IFS=: read invoked_id action_id <<< "$action_invoked"
-			[[ "$invoked_id" == "$ID" ]] && {
-				doit "$action_id"
+		s="$(sed '/\/org\/freedesktop\/Notifications: org.freedesktop.Notifications.ActionInvoked (uint32 \([0-9]\+\), '\''\(.*\)'\'')$/!d;s//\1:\2/' <<< "$line")"
+		IFS=: read i k <<< "${s}"
+			((${i}==${ID})) && {
+				doit "${k}"
 				break
 			}
 	}
