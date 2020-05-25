@@ -12,7 +12,7 @@ SEND_SH=${0%/*}/notify-send.sh
 GDBUS_PIDF=${TMP}/${APP_NAME:=${SELF}}.${$}.p
 GDBUS_ARGS=(gdbus monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
-abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
+abrt () { echo "${SELF}: ${@}" >&2 ; exit 1 ; }
 
 # consume the command line
 typeset -i ID="${1}" ;shift

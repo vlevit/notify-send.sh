@@ -27,7 +27,7 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 	trap "set >&2" 0
 }
 
-VERSION=1.1-bkw777
+VERSION="1.1-bkw777"
 ACTION_SH=${0%/*}/notify-action.sh
 NOTIFY_ARGS=(--session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
@@ -45,8 +45,6 @@ positional=false
 summary_set=false
 _r=
 
-abrt () { echo "${0}: ${@}" >&2 ; exit 1 ; }
-
 help () {
 	cat <<EOF
 Usage:
@@ -58,7 +56,7 @@ Help Options:
 Application Options:
   -u, --urgency=LEVEL               Specifies the urgency level (low, normal, critical).
   -t, --expire-time=TIME            Specifies the timeout in milliseconds at which to expire the notification.
-  -f, --force-expire                Forcefully closes the notification when the notification has expired.
+  -f, --force-expire                Actively close the notification after the expire time, or after processing any action.
   -a, --app-name=APP_NAME           Specifies the app name for the icon.
   -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
   -c, --category=TYPE[,TYPE...]     Specifies the notification category.
@@ -69,22 +67,26 @@ Application Options:
   -p, --print-id                    Print the notification ID to the standard output.
   -r, --replace=ID                  Replace existing notification.
   -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
-  -s, --close=ID                    Close notification.
+  -s, --close=ID                    Close notification. With -R, get ID from -R file.
   -v, --version                     Version of the package.
 
 EOF
 }
 
+abrt () { echo "${SELF}: ${@}" >&2 ; exit 1 ; }
+
 notify_close () {
 	i=${2} ;((${i}>0)) && sleep ${i:0:-3}.${i:$((${#i}-3))}
-	gdbus call "${NOTIFY_ARGS[@]}" --method org.freedesktop.Notifications.CloseNotification "${1}" >/dev/null
+	gdbus call ${NOTIFY_ARGS[@]} --method org.freedesktop.Notifications.CloseNotification "${1}" >&-
 }
 
-make_hint () {
-	_r="" ;local t=${1} n=${2} c=${3}
-	[[ ${t} =~ ^(byte|int32|double|string)$ ]] || abrt "Hint types: byte int32 double string"
-	[[ ${t} = string ]] && c="\"${3}\""
-	_r="\"${n}\": <${t} ${c}>"
+process_urgency () {
+	case "${1}" in
+		0|low) URGENCY=0 ;;
+		1|normal) URGENCY=1 ;;
+		2|critical) URGENCY=2 ;;
+		*) abrt "Urgency values: 0 low 1 normal 2 critical" ;;
+	esac
 }
 
 process_category () {
@@ -92,6 +94,13 @@ process_category () {
 	for c in "${a[@]}"; do
 		make_hint string category "${c}" && HINTS+=(${_r})
 	done
+}
+
+make_hint () {
+	_r="" ;local t=${1} n=${2} c=${3}
+	[[ ${t} =~ ^(byte|int32|double|string)$ ]] || abrt "Hint types: byte int32 double string"
+	[[ ${t} = string ]] && c="\"${3}\""
+	_r="\"${n}\": <${t} ${c}>"
 }
 
 process_hint () {
@@ -202,10 +211,10 @@ for s in "${HINTS[@]}" ;do h+=,${s} ;done
 
 # send the dbus message, collect the notification ID
 typeset -i OLD_ID=${ID} NEW_ID=0
-s=$(gdbus call "${NOTIFY_ARGS[@]}"  \
+s=$(gdbus call ${NOTIFY_ARGS[@]} \
 	--method org.freedesktop.Notifications.Notify \
-	"$APP_NAME" "$ID" "$ICON" "$SUMMARY" "$BODY" \
-	"[${a}]" "{${h}}" "int32 $EXPIRE_TIME")
+	"${APP_NAME}" ${ID} "${ICON}" "${SUMMARY}" "${BODY}" \
+	"[${a}]" "{${h}}" "int32 ${EXPIRE_TIME}")
 
 # process the ID
 s=${s%,*} NEW_ID=${s#* }
