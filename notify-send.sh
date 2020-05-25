@@ -19,7 +19,7 @@
 # Desktop Notifications Specification
 # https://developer.gnome.org/notification-spec/
 
-VERSION=1.1
+VERSION=1.1-bkw777
 NOTIFY_ARGS=(--session
              --dest org.freedesktop.Notifications
              --object-path /org/freedesktop/Notifications)
