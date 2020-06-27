@@ -292,6 +292,11 @@ while (( $# > 0 )) ; do
             ;;
         -s|--close|--close=*)
             [[ "$1" = --close=* ]] && close_id="${1#*=}" || { shift; close_id="$1"; }
+            # always check that --close provides a numeric value
+            if [[ -z "$close_id" || ! "$close_id" =~ ^[0-9]+$ ]]; then
+              echo "Invalid close id: '$close_id'"
+              exit 1
+            fi
             notify_close "$close_id"
             exit $?
             ;;
@@ -304,6 +309,11 @@ while (( $# > 0 )) ; do
     esac
     shift
 done
+
+# always force --replace and --replace-file to provide a numeric value; 0 means no id provided
+if [[ -z "$REPLACE_ID" || ! "$REPLACE_ID" =~ ^[0-9]+$ ]]; then
+    REPLACE_ID=0
+fi
 
 # urgency is always set
 HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
