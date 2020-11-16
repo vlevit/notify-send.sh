@@ -117,7 +117,7 @@ notify() {
                           | parse_notification_id)
 
     if [[ -n "$STORE_ID" ]] ; then
-        echo "$NOTIFICATION_ID" > $STORE_ID
+        echo "$NOTIFICATION_ID" > "$STORE_ID"
     fi
     if [[ -n "$PRINT_ID" ]] ; then
         echo "$NOTIFICATION_ID"
@@ -286,7 +286,7 @@ while (( $# > 0 )) ; do
         -R|--replace-file|--replace-file=*)
             [[ "$1" = --replace-file=* ]] && filename="${1#*=}" || { shift; filename="$1"; }
             if [[ -s "$filename" ]]; then
-                REPLACE_ID="$(< $filename)"
+                REPLACE_ID="$(< "$filename")"
             fi
             STORE_ID="$filename"
             ;;
