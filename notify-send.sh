@@ -117,7 +117,7 @@ notify() {
                           | parse_notification_id)
 
     if [[ -n "$STORE_ID" ]] ; then
-        echo "$NOTIFICATION_ID" > $STORE_ID
+        echo "$NOTIFICATION_ID" > "$STORE_ID"
     fi
     if [[ -n "$PRINT_ID" ]] ; then
         echo "$NOTIFICATION_ID"
