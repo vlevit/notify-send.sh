@@ -112,6 +112,7 @@ notify() {
 
     NOTIFICATION_ID=$(gdbus call "${NOTIFY_ARGS[@]}"  \
                             --method org.freedesktop.Notifications.Notify \
+                            -- \
                             "$APP_NAME" "$REPLACE_ID" "$ICON" "$SUMMARY" "$BODY" \
                             "${actions}" "${hints}" "int32 $EXPIRE_TIME" \
                           | parse_notification_id)
