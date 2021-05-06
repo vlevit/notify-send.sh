@@ -28,13 +28,14 @@ additional ones:
     Application Options:
       -u, --urgency=LEVEL               Specifies the urgency level (low, normal, critical).
       -t, --expire-time=TIME            Specifies the timeout in milliseconds at which to expire the notification.
-      -a, --app-name=APP_NAME           Specifies the app name for the icon
+      -f, --force-expire                Forcefully closes the notification when the notification has expired.
+      -a, --app-name=APP_NAME           Specifies the app name for the icon.
       -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
       -c, --category=TYPE[,TYPE...]     Specifies the notification category.
       -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
       -o, --action=LABEL:COMMAND        Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.
       -d, --default-action=COMMAND      Specifies the default action which is usually invoked by clicking the notification.
-      -l, --close-action=COMMAND        Specifies the action invoked when the notification is closed.
+      -l, --close-action=COMMAND        Specifies the action invoked when notification is closed.
       -p, --print-id                    Print the notification ID to the standard output.
       -r, --replace=ID                  Replace existing notification.
       -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
