@@ -6,31 +6,6 @@ on:
       - master
 
 jobs:
-  build-python:
-    runs-on: ubuntu-20.04
-    steps:
-      - name: GitHub Environment Variables Action
-        uses: FranzDiebold/github-env-vars-action@v1.2.1
-
-      - name: Checkout code
-        uses: actions/checkout@v2.2.0
-
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.7
-
-      - uses: casperdcl/deploy-pypi@v2
-        with:
-          build: true
-          upload: false
-          dist_dir: "dist"
-
-      - name: Upload Python distribution artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: "${{ env.GITHUB_REPOSITORY_NAME }}-#${{ env.GITHUB_SHA_SHORT }}-py"
-          path: "dist"
 
   build-debian:
     runs-on: ubuntu-20.04
@@ -68,20 +43,13 @@ jobs:
 
   create-draft-release:
     runs-on: ubuntu-20.04
-    needs: [ build-debian, build-python ]
+    needs: build-debian
     steps:
       - name: GitHub Environment Variables Action
         uses: FranzDiebold/github-env-vars-action@v1.2.1
 
       - name: Checkout code
         uses: actions/checkout@v2.2.0
-
-      - name: Download Python artifact
-        if: needs.check-should-run.outputs.is_python_package == 'true'
-        uses: actions/download-artifact@v2
-        with:
-            name: "${{ env.GITHUB_REPOSITORY_NAME }}-#${{ env.GITHUB_SHA_SHORT }}-py"
-            path: "./py"
 
       - name: Download Debian binary artifacts
         uses: actions/download-artifact@v2
@@ -108,7 +76,6 @@ jobs:
           draft: true
           prerelease: false
           files: |
-            ./py/*
             ./deb/*
             ./deb-src/*
         env:
