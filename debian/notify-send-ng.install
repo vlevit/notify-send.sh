@@ -1,2 +1,2 @@
-notify-action               /usr/bin
-notify-send                 /usr/bin
+notify-action.sh               /usr/bin
+notify-send.sh                 /usr/bin
