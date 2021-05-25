@@ -1,0 +1,2 @@
+notify-send-ng: no-manual-page usr/bin/notify-action
+notify-send-ng: no-manual-page usr/bin/notify-send

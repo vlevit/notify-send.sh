@@ -1,0 +1,5 @@
+notify-send.sh (1.2-1) buster; urgency=medium
+
+  * Debianize notify-send.sh
+
+ -- pi-top <deb-maintainers@pi-top.com>  Tue, 25 May 2021 20:53:44 +0100

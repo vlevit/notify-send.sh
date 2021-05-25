@@ -1,0 +1,9 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_install:
+		# Drop '.sh' suffix before packaging
+		mv notify-action.sh notify-action
+		mv notify-send.sh notify-send
+		dh_install
