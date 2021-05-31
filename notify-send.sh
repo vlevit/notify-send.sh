@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 # notify-send.sh - drop-in replacement for notify-send with more features
 # Copyright (C) 2015-2020 notify-send.sh authors (see AUTHORS file)
@@ -27,10 +27,33 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 	trap "set >&2" 0
 }
 
+echo(){ printf '%b' "$*\n"; }
 VERSION="1.1-bkw777"
 ACTION_SH=${0%/*}/notify-action.sh
 NOTIFY_ARGS=(--session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
+help(){
+	echo 'Usage:';
+	echo '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
+	echo 'Help Options:';
+	echo '\t-?|--help                      Show help options';
+	echo '';
+	echo 'Application Options:';
+	echo '\t-u, --urgency=LEVEL            Specifies the urgency level (low, normal, critical).';
+	echo '\t-t, --expire-time=TIME         Specifies the timeout in milliseconds at which to expire the notification.';
+	echo '\t-f, --force-expire             Forcefully closes the notification when the notification has expired.';
+	echo '\t-a, --app-name=APP_NAME        Specifies the app name for the icon.';
+	echo '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
+	echo '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
+	echo '\t-h, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
+	echo "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.";
+	echo '\t-d, --default-action=COMMAND   Specifies the default action which is usually invoked by clicking the notification.';
+	echo '\t-l, --close-action=COMMAND     Specifies the action invoked when notification is closed.';
+	echo '\t-p, --print-id                 Print the notification ID to the standard output.';
+	echo '\t-r, --replace=ID               Replace existing notification.';
+	echo '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
+	echo '\t-s, --close=ID                 Close notification.';
+  echo '\t-v, --version                  Version of the package.';
 typeset -i i=0 ID=0 EXPIRE_TIME=-1 URGENCY=1
 unset ID_FILE
 AKEYS=()
