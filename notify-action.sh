@@ -25,15 +25,16 @@ echo(){ printf '%b' "$*\n"; }
 abrt () { echo "${SELF}: $*" >&2; exit 1; }
 cleanup() { rm -f "$GDBUS_PIDF"; }
 
+# Globals (Comprehensive)
 SELF=${0##*/};
 TMP=${XDG_RUNTIME_DIR:-/tmp};
 SEND_SH=${0%/*}/notify-send.sh;
-GDBUS_PIDF=${TMP}/${APP_NAME:=${SELF}}.${$}.pid;
+GDBUS_PIDF=$TMP/${APP_NAME:=$SELF}.$$.pid;
 GDBUS_ARGS="monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications";
 ACTIONC=0;
 
 ${DEBUG_NOTIFY_SEND:=false} && { # Use parameter substitution to toggle debug.
-	exec 2>"${TMP}/.${SELF}.${$}.error";
+	exec 2>"$TMP/.$SELF.$$.error";
 	set -x;
 	trap "set >&2" 0; # Print everything to stderr.
 }
@@ -42,7 +43,7 @@ ${DEBUG_NOTIFY_SEND:=false} && { # Use parameter substitution to toggle debug.
 ID="${1}"; shift;
 if test "$ID" = "--help"; then
 	# TODO: Create help and CLI for this application to make it more user freindly.
-	#       gotta help people understand what the hell's going on.
+	#       gotta help people understand why they need this.
 	exit;
 fi;
 test -n "$ID" || abrt "no notification id";
@@ -59,21 +60,20 @@ test "$ACTIONC" -gt 0 || abrt "no actions";
 # Test to ensure we have an Xorg Display open so we're not doing things in vain.
 test -n "$DISPLAY" || abrt "no DISPLAY";
 i=0; p=0;
-#shopt -s extglob # allow ** for recursive file matches. where is this useful?
 
 # kill obsolete monitors (now)
 printf '%s %s ' "$DISPLAY" "$ID" > "$GDBUS_PIDF";
-for f in ${TMP}/${APP_NAME}.+([0-9]).pid; do
-	# The above doesn't work in posix shell.
+for f in ${TMP}/${APP_NAME}.*.pid; do
+	# Since our PID file suffix is unique, we can guarantee the above ill work
+	# for all existing PID files.
 	test -s "$f" || continue;
 	test "$f" -ot "$GDBUS_PIDF" || continue;
 	read d i p x < "$f";
+
+	# Kill processes with have the same display.
 	test "$d" = "$DISPLAY" || continue;
+	# Kill processes which have the same notification ID.
 	test "$i" -eq "$ID" || continue;
-	# Why do we need to check if the PID of our waiting process is != 0?
-	# That's virtually garanteeed since not only would the init system have
-	# to run, but Xorg and the window manager as well. This check is useless.
-	test "$p" -gt 1 || continue;
 
 	kill "$p";
 	rm -f "$f";
@@ -86,8 +86,6 @@ conclude () {
 	test -s "$GDBUS_PIDF" || return;
 	read d i p x < "$GDBUS_PIDF";
 	rm -f "$GDBUS_PIDF";
-	# Again, this is useless. I think I understand what you were going for tho.
-	test "$p" -gt 1 || return;
 	kill "$p";
 }
 
