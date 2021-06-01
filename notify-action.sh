@@ -20,33 +20,75 @@
 # NOTE: Desktop Notifications Specification
 # https://developer.gnome.org/notification-spec/
 
+################################################################################
+## Globals (Comprehensive)
+
+# Symlink script resolution via coreutils
+SELF="/`readlink -n -f $0`"; x=${SELF%/*}; x=${x#/}; x=${x:-.};
+PROCDIR=$(cd "$x"; pwd); # Process direcotry.
+TMP=${XDG_RUNTIME_DIR:-/tmp}; # XDG standard runtime directory.
+GDBUS_PIDF=$TMP/${APP_NAME:=$SELF}.$$.dat;
+SEND_SH=$PROCDIR/notify-send.sh;
+ACTIONC=0;
+#ID=; # Current shell's target ID.
+#DISPLAY=; # Xorg display to use.
+#ACTION_(*); # Actions the shell commit on the $1 regex matching gdbus event.
+#x=; # General use temporary variable.
+#p=; # PID extracted from external files.
+#i=; # ID extracted from external files.
+#d=; # DISPLAY extracted from external files.
+
+################################################################################
+## Functions
 
 echo(){ printf '%b' "$*\n"; }
-abrt () { echo "${SELF}: $*" >&2; exit 1; }
-cleanup() { rm -f "$GDBUS_PIDF"; }
+abrt () { echo "$SELF: $*" >&2; exit 1; }
 
-# Globals (Comprehensive)
-SELF=${0##*/};
-TMP=${XDG_RUNTIME_DIR:-/tmp};
-SEND_SH=${0%/*}/notify-send.sh;
-GDBUS_PIDF=$TMP/${APP_NAME:=$SELF}.$$.pid;
-GDBUS_ARGS="monitor --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications";
-ACTIONC=0;
+do_action () {
+	local ACTION; ACTION="$(eval echo \$ACTION_"${1}")";
+	if test -n "$ACTION"; then
+		# Close all the file descriptors for this event.
+		setsid -f "$ACTION" >&- 2>&- <&- &
+		# Confused what this does. Looks like a feature but would terminate after
+		# any action, so that makes me think it's an anti-feature. What the heck?
+		${EXPLICIT_CLOSE:=false} && $SEND_SH -s "$ID";
+	fi;
+}
 
-${DEBUG_NOTIFY_SEND:=false} && { # Use parameter substitution to toggle debug.
+conclude () {
+	test -s "$GDBUS_PIDF" || return;
+	read d i p x < "$GDBUS_PIDF";
+
+	# Only need to kill `gdbus` if it still exists. Because this process is
+	# shutting down the shell parent. If we don't do this, `gdbus` will be
+	# left alive dangling on an empty FD.
+	test -z "$p" || kill "$p";
+
+	# Always attempt to clean up the PID file.
+	rm -vf "$GDBUS_PIDF";
+}
+
+################################################################################
+## Main Script
+
+# Use parameter substitution to toggle debug.
+${DEBUG_NOTIFY_SEND:=false} && {
 	exec 2>"$TMP/.$SELF.$$.error";
 	set -x;
-	trap "set >&2" 0; # Print everything to stderr.
+	trap "set >&2" EXIT HUP INT QUIT ABRT KILL TERM; # Print everything to stderr.
 }
 
 # consume the command line
-ID="${1}"; shift;
+test -n "${ID:=$1}" || abrt "No notification id provided."; shift;
+case $string in
+    ''|*[!0-9]*) abrt "ID must be integer type.";;
+esac;
+
 if test "$ID" = "--help"; then
 	# TODO: Create help and CLI for this application to make it more user freindly.
-	#       gotta help people understand why they need this.
+	#       gotta help people understand what the hell's going on.
 	exit;
 fi;
-test -n "$ID" || abrt "no notification id";
 
 while test ${#} -gt 0; do
 	ACTIONC=$((ACTIONC+1));
@@ -55,15 +97,14 @@ while test ${#} -gt 0; do
 	eval "ACTION_$1=$2";
 	shift 2;
 done;
-test "$ACTIONC" -gt 0 || abrt "no actions";
+test "$ACTIONC" -gt 0 || abrt "No action provided.";
 
 # Test to ensure we have an Xorg Display open so we're not doing things in vain.
-test -n "$DISPLAY" || abrt "no DISPLAY";
-i=0; p=0;
+test -n "$DISPLAY" || abrt "DISPLAY is unset; No Xorg available.";
 
 # kill obsolete monitors (now)
 printf '%s %s ' "$DISPLAY" "$ID" > "$GDBUS_PIDF";
-for f in ${TMP}/${APP_NAME}.*.pid; do
+for f in ${TMP}/${APP_NAME}.*.dat; do
 	# Since our PID file suffix is unique, we can guarantee the above ill work
 	# for all existing PID files.
 	test -s "$f" || continue;
@@ -75,38 +116,33 @@ for f in ${TMP}/${APP_NAME}.*.pid; do
 	# Kill processes which have the same notification ID.
 	test "$i" -eq "$ID" || continue;
 
-	kill "$p";
+	# Fetch group PID from filename.
+	p=${f%.dat}; p=${p##*.};
+
+	# Kill by group ID. More robust than depending on gdbus invocation & PID.
+	kill -- "-$p";
 	rm -f "$f";
-done
+done;
 
-# kill current monitor (on exit)
-trap "conclude" 0;
-conclude () {
-	${DEBUG_NOTIFY_SEND} && set >&2; # BUGFIX
-	test -s "$GDBUS_PIDF" || return;
-	read d i p x < "$GDBUS_PIDF";
-	rm -f "$GDBUS_PIDF";
-	kill "$p";
-}
-
-# execute an invoked command
-do_action () {
-	# Close all the file descriptors for this event.
-	setsid -f "$(eval echo \$ACTION_"${1}")" >&- 2>&- <&- &
-	# Confused what this does. Looks like a feature but would terminate after
-	# any action, so that makes me think it's an anti-feature. What the heck?
-	${EXPLICIT_CLOSE:=false} && $SEND_SH -s "$ID";
-}
+# kill current monitor (on exit and other processable signals)
+trap "conclude" EXIT HUP INT QUIT ABRT TERM;
 
 # start the monitor
 {
-	gdbus $GDBUS_ARGS & echo $! >> "$GDBUS_PIDF";
+	gdbus monitor --session \
+		--dest org.freedesktop.Notifications \
+		--object-path /org/freedesktop/Notifications &
+
+	echo "$!" >> $GDBUS_PIDF;
 } | \
 while IFS=" :.(),'" read x x x x e x i x k x; do
 	# XXX: The above read isn't as robust as a regex search and may cause
 	#      this script to break if gdbus's logging format ever changes.
 	#      But it's lightning fast and portable, so the trade is worth it.
-	test "$i" -eq "$ID" || continue;
+
+	# The first two lines always contain garbage data, so supress the illegal
+	# number warnings from test by blocking stderr.
+	test "$i" -eq "$ID" 2>/dev/null || continue;
 	case "$e" in
 		# Only
 		"NotificationClosed") do_action "close"; break ;;
