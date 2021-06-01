@@ -1,42 +1,61 @@
 #!/bin/sh
-
-# notify-send.sh - drop-in replacement for notify-send with more features
+# @file - notify-send.sh
+# @brief - drop-in replacement for notify-send with more features
+###############################################################################
 # Copyright (C) 2015-2020 notify-send.sh authors (see AUTHORS file)
-
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-
+#
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-# Desktop Notifications Specification
+# NOTE: Desktop Notifications Specification
 # https://developer.gnome.org/notification-spec/
 
-SELF=${0##*/}
-TMP=${XDG_RUNTIME_DIR:-/tmp}
-${DEBUG_NOTIFY_SEND:=false} && {
-	exec 2>${TMP}/.${SELF}.${$}.e
-	set -x
-	trap "set >&2" 0
-}
+################################################################################
+## Globals (Comprehensive)
+
+# Symlink script resolution via coreutils
+SELF="/"$(readlink -n -f $0); x=${SELF%/*}; x=${x#/}; x=${x:-.};
+PROCDIR=$(cd "$x"; pwd); # Process direcotry.
+APP_NAME=${SELF##*/};
+TMP=${XDG_RUNTIME_DIR:-/tmp};
+VERSION="2.0.0-m3tior"; # Changed to semantic versioning.
+ACTION_SH=$PROCDIR/notify-action.sh
+NOTIFY_ARGS="--session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications";
+EXPIRE_TIME=-1;
+ID=0;
+URGENCY=1;
+PRINT_ID=false
+EXPLICIT_CLOSE=false
+positional=false
+summary_set=false
+AKEYS=()
+ACMDS=()
+HINTS=()
+SUMMARY=
+BODY=
+_r=
+
+################################################################################
+## Functions
 
 echo(){ printf '%b' "$*\n"; }
-VERSION="1.1-bkw777"
-ACTION_SH=${0%/*}/notify-action.sh
-NOTIFY_ARGS=(--session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications)
 
-help(){
+help () {
 	echo 'Usage:';
 	echo '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
 	echo 'Help Options:';
-	echo '\t-?|--help                      Show help options';
+	echo '\t-h|--help                      Show help options.';
+	echo '\t-v|--version                   Print version number.';
 	echo '';
 	echo 'Application Options:';
 	echo '\t-u, --urgency=LEVEL            Specifies the urgency level (low, normal, critical).';
@@ -45,7 +64,7 @@ help(){
 	echo '\t-a, --app-name=APP_NAME        Specifies the app name for the icon.';
 	echo '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
 	echo '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
-	echo '\t-h, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
+	echo '\t-H, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
 	echo "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.";
 	echo '\t-d, --default-action=COMMAND   Specifies the default action which is usually invoked by clicking the notification.';
 	echo '\t-l, --close-action=COMMAND     Specifies the action invoked when notification is closed.';
@@ -53,47 +72,6 @@ help(){
 	echo '\t-r, --replace=ID               Replace existing notification.';
 	echo '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
 	echo '\t-s, --close=ID                 Close notification.';
-  echo '\t-v, --version                  Version of the package.';
-typeset -i i=0 ID=0 EXPIRE_TIME=-1 URGENCY=1
-unset ID_FILE
-AKEYS=()
-ACMDS=()
-HINTS=()
-APP_NAME=${SELF}
-PRINT_ID=false
-EXPLICIT_CLOSE=false
-SUMMARY=
-BODY=
-positional=false
-summary_set=false
-_r=
-
-help () {
-	cat <<EOF
-Usage:
-  notify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification
-
-Help Options:
-  -?|--help                         Show help options
-
-Application Options:
-  -u, --urgency=LEVEL               Specifies the urgency level (low, normal, critical).
-  -t, --expire-time=TIME            Specifies the timeout in milliseconds at which to expire the notification.
-  -f, --force-expire                Actively close the notification after the expire time, or after processing any action.
-  -a, --app-name=APP_NAME           Specifies the app name for the icon.
-  -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
-  -c, --category=TYPE[,TYPE...]     Specifies the notification category.
-  -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
-  -o, --action=LABEL:COMMAND        Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.
-  -d, --default-action=COMMAND      Specifies the default action which is usually invoked by clicking the notification.
-  -l, --close-action=COMMAND        Specifies the action invoked when notification is closed.
-  -p, --print-id                    Print the notification ID to the standard output.
-  -r, --replace=ID                  Replace existing notification.
-  -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
-  -s, --close=ID                    Close notification. With -R, get ID from -R file.
-  -v, --version                     Version of the package.
-
-EOF
 }
 
 abrt () { echo "${SELF}: ${@}" >&2 ; exit 1 ; }
@@ -153,10 +131,19 @@ process_posargs () {
 	${summary_set} && BODY=${1} || SUMMARY=${1} summary_set=true
 }
 
+################################################################################
+## Main Script
+
+${DEBUG_NOTIFY_SEND:=false} && {
+	exec 2>${TMP}/.${SELF}.${$}.e
+	set -x
+	trap "set >&2" 0
+}
+
 while ((${#})) ; do
 	s= i=0
-	case "${1}" in
-		-\?|--help)
+	case "$1" in
+		-h|--help)
 			help
 			exit 0
 			;;
