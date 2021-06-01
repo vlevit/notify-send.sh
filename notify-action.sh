@@ -24,12 +24,13 @@
 ## Globals (Comprehensive)
 
 # Symlink script resolution via coreutils
-SELF="/`readlink -n -f $0`"; x=${SELF%/*}; x=${x#/}; x=${x:-.};
+SELF="/"$(readlink -n -f $0); x=${SELF%/*}; x=${x#/}; x=${x:-.};
 PROCDIR=$(cd "$x"; pwd); # Process direcotry.
 TMP=${XDG_RUNTIME_DIR:-/tmp}; # XDG standard runtime directory.
-GDBUS_PIDF=$TMP/${APP_NAME:=$SELF}.$$.dat;
+GDBUS_PIDF=$TMP/${APP_NAME:=${SELF##*/}}.$$.dat;
 SEND_SH=$PROCDIR/notify-send.sh;
 ACTIONC=0;
+#CONCLUDED=; Used to bugfix the exit handler.
 #ID=; # Current shell's target ID.
 #DISPLAY=; # Xorg display to use.
 #ACTION_(*); # Actions the shell commit on the $1 regex matching gdbus event.
@@ -56,6 +57,10 @@ do_action () {
 }
 
 conclude () {
+	# Bugfix: twice recurring handler
+	if ${CONCLUDED:=false}; then return; fi; CONCLUDED=true;
+
+	# Only handle the datafile when it exists.
 	test -s "$GDBUS_PIDF" || return;
 	read d i p x < "$GDBUS_PIDF";
 
@@ -73,28 +78,44 @@ conclude () {
 
 # Use parameter substitution to toggle debug.
 ${DEBUG_NOTIFY_SEND:=false} && {
-	exec 2>"$TMP/.$SELF.$$.error";
+	exec 2>"$TMP/$APP_NAME.$$.log";
 	set -x;
 	trap "set >&2" EXIT HUP INT QUIT ABRT KILL TERM; # Print everything to stderr.
 }
 
-# consume the command line
-test -n "${ID:=$1}" || abrt "No notification id provided."; shift;
-case $string in
-    ''|*[!0-9]*) abrt "ID must be integer type.";;
-esac;
-
-if test "$ID" = "--help"; then
+if test "$1" = "--help" -o "$1" = "-h"; then
 	# TODO: Create help and CLI for this application to make it more user freindly.
 	#       gotta help people understand what the hell's going on.
+	echo 'Usage: notify-action.sh ID ACTION_KEY VALUE [[ACTION_KEY] [VALUE]]...';
+	echo 'Description:';
+	echo "\tA suplemental utility for notify-send.sh that handles action events.";
+	echo;
+	echo 'Help Options:';
+	echo '\t-h|--help           Show help options';
+	echo;
+	echo 'Positional Arguments:';
+	echo '\tID          - The event ID to handle.';
+	echo '\tACTION_KEY  - The name of the event to handle.';
+	echo '\tVALUE       - The action to be taken when the event fires.';
 	exit;
 fi;
+
+# consume the command line
+test -n "${ID:=$1}" || abrt "No notification id provided."; shift;
+case "$ID" in
+	''|*[!0-9]*) abrt "ID must be integer type.";;
+esac;
 
 while test ${#} -gt 0; do
 	ACTIONC=$((ACTIONC+1));
 	# I don't like using eval, but it's the simplest way of getting this done
 	# in a portable way. TODO: make this more secure in the future.
-	eval "ACTION_$1=$2";
+	for x in $1; do true; done;
+	eval "ACTION_$x=\"$2\"";
+
+	# Throw error when key is supplied without action value.
+	test -n "$2" || abrt "Action #$ACTIONC supplied key without value.";
+
 	shift 2;
 done;
 test "$ACTIONC" -gt 0 || abrt "No action provided.";
@@ -105,15 +126,15 @@ test -n "$DISPLAY" || abrt "DISPLAY is unset; No Xorg available.";
 # kill obsolete monitors (now)
 printf '%s %s ' "$DISPLAY" "$ID" > "$GDBUS_PIDF";
 for f in ${TMP}/${APP_NAME}.*.dat; do
-	# Since our PID file suffix is unique, we can guarantee the above ill work
+	# Since our PID file suffix is unique, we can guarantee the above will work
 	# for all existing PID files.
 	test -s "$f" || continue;
 	test "$f" -ot "$GDBUS_PIDF" || continue;
 	read d i p x < "$f";
 
-	# Kill processes with have the same display.
+	# Ensure target processes have the same display.
 	test "$d" = "$DISPLAY" || continue;
-	# Kill processes which have the same notification ID.
+	# Ensure target processes have the same notification ID.
 	test "$i" -eq "$ID" || continue;
 
 	# Fetch group PID from filename.
