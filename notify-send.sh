@@ -28,7 +28,7 @@ SELF="/"$(readlink -n -f $0); x=${SELF%/*}; x=${x#/}; x=${x:-.};
 PROCDIR=$(cd "$x"; pwd); # Process direcotry.
 APP_NAME=${SELF##*/};
 TMP=${XDG_RUNTIME_DIR:-/tmp};
-VERSION="2.0.0-m3tior"; # Changed to semantic versioning.
+VERSION="2.0.0-rc.m3tior"; # Changed to semantic versioning.
 ACTION_SH=$PROCDIR/notify-action.sh
 NOTIFY_ARGS="--session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications";
 EXPIRE_TIME=-1;
@@ -49,6 +49,7 @@ _r=
 ## Functions
 
 echo(){ printf '%b' "$*\n"; }
+abrt () { echo "$SELF: $*" >&2; exit 1; }
 
 help () {
 	echo 'Usage:';
@@ -74,7 +75,20 @@ help () {
 	echo '\t-s, --close=ID                 Close notification.';
 }
 
-abrt () { echo "${SELF}: ${@}" >&2 ; exit 1 ; }
+
+is_int() {
+	case "$1" in
+		''|*[!0-9]*) return 1;;
+		*) return 0;;
+	esac;
+}
+
+starts_with(){
+	local STR;   STR="$1";
+	local QUERY; QUERY="$2";
+	test "${STR#$QUERY}" != "$STR";
+	return $?; # This may be redundant, but I'm doing it anyway for my sanity.
+}
 
 notify_close () {
 	i=${2} ;((${i}>0)) && sleep ${i:0:-3}.${i:$((${#i}-3))}
@@ -82,7 +96,7 @@ notify_close () {
 }
 
 process_urgency () {
-	case "${1}" in
+	case "$1" in
 		0|low) URGENCY=0 ;;
 		1|normal) URGENCY=1 ;;
 		2|critical) URGENCY=2 ;;
@@ -91,7 +105,7 @@ process_urgency () {
 }
 
 process_category () {
-	local a c ;IFS=, a=(${1})
+	local a c; IFS=, a=(${1});
 	for c in "${a[@]}"; do
 		make_hint string category "${c}" && HINTS+=(${_r})
 	done
@@ -140,79 +154,73 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 	trap "set >&2" 0
 }
 
-while ((${#})) ; do
-	s= i=0
+while test "$#" -gt 0; do
+	# s= i=0
 	case "$1" in
-		-h|--help)
-			help
-			exit 0
-			;;
-		-v|--version)
-			echo "${SELF} ${VERSION}"
-			exit 0
-			;;
+		--) positional=true;;
+		-h|--help) help; exit 0;;
+		-v|--version) echo "v$VERSION"; exit 0;;
+		-f|--force-expire) export EXPLICIT_CLOSE=true;;
+		-p|--print-id) PRINT_ID=true;;
 		-u|--urgency|--urgency=*)
-			[[ "${1}" = --urgency=* ]] && s=${1#*=} || { shift ;s=${1} ; }
-			process_urgency "${s}"
-			;;
+			starts_with "$1" '--urgency=' && s="${1#*=}" || { shift; s="$1"; };
+			process_urgency "$s";
+		;;
 		-t|--expire-time|--expire-time=*)
-			[[ "${1}" = --expire-time=* ]] && EXPIRE_TIME=${1#*=} || { shift ;EXPIRE_TIME=${1} ; }
-			;;
-		-f|--force-expire)
-			export EXPLICIT_CLOSE=true
-			;;
+			starts_with "$1" '--expire-time=' && s="${1#*=}" || { shift; s="$1"; };
+			EXPIRE_TIME="$s";
+		;;
 		-a|--app-name|--app-name=*)
-			[[ "${1}" = --app-name=* ]] && APP_NAME=${1#*=} || { shift ;APP_NAME=${1} ; }
-			export APP_NAME
-			;;
+			starts_with "$1" '--app-name=' && s="${1#*=}" || { shift; s="$1"; };
+			export APP_NAME=$s;
+		;;
 		-i|--icon|--icon=*)
-			[[ "${1}" = --icon=* ]] && ICON=${1#*=} || { shift ;ICON=${1} ; }
-			;;
+			starts_with "$1" '--icon=' && s="${1#*=}" || { shift; s="$1"; };
+			ICON="$s";
+		;;
 		-c|--category|--category=*)
-			[[ "${1}" = --category=* ]] && s=${1#*=} || { shift ;s=${1} ; }
-			process_category "${s}"
-			;;
-		-h|--hint|--hint=*)
-			[[ "${1}" = --hint=* ]] && s=${1#*=} || { shift ;s=${1} ; }
-			process_hint "${s}"
-			;;
+			starts_with "$1" '--category=' && s="${1#*=}" || { shift; s="$1"; };
+			process_category "$s";
+		;;
+		-H|--hint|--hint=*)
+			starts_with "$1" '--hint=' && s="${1#*=}" || { shift; s="$1"; };
+			process_hint "$s";
+		;;
 		-o|--action|--action=*)
-			[[ "${1}" == --action=* ]] && s=${1#*=} || { shift ;s=${1} ; }
-			process_action "${s}"
-			;;
+			starts_with "$1" '--action=' && s="${1#*=}" || { shift; s="$1"; };
+			process_action "$s";
+		;;
 		-d|--default-action|--default-action=*)
-			[[ "${1}" == --default-action=* ]] && s=${1#*=} || { shift ;s=${1} ; }
-			process_special_action default "${s}"
-			;;
+			starts_with "$1" '--default-action=' && s="${1#*=}" || { shift; s="$1"; };
+			process_special_action default "$s";
+		;;
 		-l|--close-action|--close-action=*)
-			[[ "${1}" == --close-action=* ]] && s=${1#*=} || { shift ;s=${1} ; }
-			process_special_action close "${s}"
-			;;
-		-p|--print-id)
-			PRINT_ID=true
-			;;
+			starts_with "$1" '--close-action=' && s="${1#*=}" || { shift; s="$1"; };
+			process_special_action close "$s";
+		;;
 		-r|--replace|--replace=*)
-			[[ "${1}" = --replace=* ]] && ID=${1#*=} || { shift ;ID=${1} ; }
-			;;
+			starts_with "$1" '--replace=' && s="${1#*=}" || { shift; s="$1"; };
+			ID="$s";
+		;;
 		-R|--replace-file|--replace-file=*)
-			[[ "${1}" = --replace-file=* ]] && ID_FILE=${1#*=} || { shift ;ID_FILE=${1} ; }
-			[[ -s ${ID_FILE} ]] && read ID < "${ID_FILE}"
-			;;
+			starts_with "$1" '--replace-file=' && s="${1#*=}" || { shift; s="$1"; };
+			ID_FILE="$s"; ! test -s "$ID_FILE" || read ID < "$ID_FILE";
+		;;
 		-s|--close|--close=*)
-			[[ "${1}" = --close=* ]] && i=${1#*=} || { shift ;i=${1} ; }
-			((${i}<1)) && ((${ID}>0)) && i=${ID}
-			((${i}>0)) && notify_close ${i} ${EXPIRE_TIME}
-			exit ${?}
-			;;
-		--)
-			positional=true
-			;;
+			starts_with "$1" '--close=' && i="${1#*=}" || { shift; i="$1"; };
+			! is_int "$ID" || abrt 'ID should be an integer but was provided "$i".';
+			if test "$i" -lt 1 -a "$ID" -gt 0; then i="$ID"; fi;
+
+			# This has to look weird bc -e safe mode demands it.
+			test "$i" -gt 0 && notify_close "$i" "$EXPIRE_TIME" || exit "$?";
+			exit;
+		;;
 		*)
-			process_posargs "${1}"
-			;;
-	esac
-	shift
-done
+			process_posargs "$1";
+		;;
+	esac;
+	shift;
+done;
 
 # build the actions & hints strings
 a= ;for s in "${AKEYS[@]}" ;do a+=,${s} ;done ;a=${a:1}
