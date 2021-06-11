@@ -25,35 +25,33 @@
 
 # Symlink script resolution via coreutils
 SELF="/"$(readlink -n -f $0); x=${SELF%/*}; x=${x#/}; x=${x:-.};
-PROCDIR=$(cd "$x"; pwd); # Process direcotry.
-APP_NAME=${SELF##*/};
-TMP=${XDG_RUNTIME_DIR:-/tmp};
+PROCDIR="$(cd "$x"; pwd)"; # Process direcotry.
+APP_NAME="${SELF##*/}";
+TMP="${XDG_RUNTIME_DIR:-/tmp}";
 VERSION="2.0.0-rc.m3tior"; # Changed to semantic versioning.
-ACTION_SH=$PROCDIR/notify-action.sh
-NOTIFY_ARGS="--session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications";
+ACTION_SH="$PROCDIR/notify-action.sh";
 EXPIRE_TIME=-1;
 ID=0;
 URGENCY=1;
-PRINT_ID=false
-EXPLICIT_CLOSE=false
-positional=false
-summary_set=false
-AKEYS=()
-ACMDS=()
-HINTS=()
-SUMMARY=
-BODY=
-_r=
+PRINT_ID=false;
+EXPLICIT_CLOSE=false;
+positional=false;
+SUMMARY=;
+BODY=;
+AKEYS=;
+ACMDS=;
+HINTS=;
 
 ################################################################################
 ## Functions
 
 echo(){ printf '%b' "$*\n"; }
-abrt () { echo "$SELF: $*" >&2; exit 1; }
+abrt () { echo "Error in '$SELF': $*" >&2; exit 1; }
 
 help () {
 	echo 'Usage:';
 	echo '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
+	echo '';
 	echo 'Help Options:';
 	echo '\t-h|--help                      Show help options.';
 	echo '\t-v|--version                   Print version number.';
@@ -66,33 +64,107 @@ help () {
 	echo '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
 	echo '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
 	echo '\t-H, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
-	echo "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.";
+	echo "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label.";
+	echo "\t                               COMMAND is a shell command executed when action is invoked.";
 	echo '\t-d, --default-action=COMMAND   Specifies the default action which is usually invoked by clicking the notification.';
 	echo '\t-l, --close-action=COMMAND     Specifies the action invoked when notification is closed.';
 	echo '\t-p, --print-id                 Print the notification ID to the standard output.';
 	echo '\t-r, --replace=ID               Replace existing notification.';
 	echo '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
 	echo '\t-s, --close=ID                 Close notification.';
+	echo '';
 }
 
+# @describe - Prints the simplest primitive type of a value.
+# @usage - typeof [-g] VALUE
+# @param "-g" - Toggles the numerical return values which increase in order of inclusivity.
+# @param VALUE - The value you wish to check.
+# @prints (5|'string') - When no other primitive can be coerced from the input.
+# @prints (4|'filename') - When a string primitive is safe to use as a filename.
+# @prints (3|'alphanum') - When a string primitive only contains letters and numbers.
+# @prints (2|'double') - When the input can be coerced into a floating number.
+# @prints (1|'int') - When the input can be coerced into a regular integer.
+# @prints (0|'uint') - When the input can be coereced into an unsigned integer.
+typeof() {
+	local SIGNED=false FLOATING=false GROUP=false in='' f='' b='';
 
-is_int() {
-	case "$1" in
-		''|*[!0-9]*) return 1;;
-		*) return 0;;
+	# Check for group return parameter.
+	if test "$1" = "-g"; then GROUP=true; shift; fi;
+
+	in="$*";
+
+	# Check for negation sign.
+	test "$in" = "${b:=${in#-}}" || SIGNED=true;
+	in="$b"; b='';
+
+	# Check for floating point.
+	if test "$in" != "${b:=${in#*.}}" -a "$in" != "${f:=${in%.*}}"; then
+		if test "$in" != "$f.$b"; then
+			$GROUP && echo "5" || echo "string"; return;
+		fi;
+		FLOATING=true;
+	fi;
+
+	case "$in" in
+		''|*[!0-9\.]*)
+			if test "$in" != "${in#*[~\`\!@\#\$%\^\*()\+=\{\}\[\]|:;\"\'<>,?\/]}"; then
+				$GROUP && echo "5" || echo "string";
+			else
+				if test "$in" != "${1#*[_\-.\\ ]}"; then
+					$GROUP && echo "4" || echo "filename";
+				else
+					$GROUP && echo "3" || echo "alphanum";
+				fi;
+			fi;;
+		*)
+			if $FLOATING; then $GROUP && echo "2" || echo "double"; return; fi;
+			if $SIGNED; then $GROUP && echo "1" || echo "int"; return; fi;
+			$GROUP && echo "0" || echo "uint";
+		;;
 	esac;
 }
 
+# @describe - Ensures any characters that are embeded inside quotes can
+#             be `eval`ed without worry of XSS / Parameter Injection.
+# @usage sanitize_quote_escapes STRING('s)...
+# @param STRING('s) - The string or strings you wish to sanitize.
+sanitize_quote_escapes(){
+	local ESCAPES="\\\"\$" TODO="$*" DONE= f= b= c=;
+	while test -n "$TODO"; do
+		# NOTE: If the substring isn't found, IN_PROGRESS will be equivalent
+		#       to TODO. So it will erase TODO and should written to DONE on
+		#       the first pass.
+
+		f="${TODO%%[$ESCAPES]*}"; # front of delimeter.
+		b="${TODO#*[$ESCAPES]}"; # back of delimeter.
+
+		# Only need to test one of the directions since $b and $f will be the same
+		# if this is true.
+		if test "$f" = "$TODO"; then break; fi;
+
+		# Capture chracter by removing front
+		test -z "$f" && c="$TODO" || c="${TODO#$f}";
+		# and rear segments if they exist.
+		test -z "$b"              || c="${c%$b}";
+
+		DONE="$DONE$f\\$c";
+		# Subtract front segment from TODO.
+		TODO="${TODO#$f$c}";
+	done;
+
+	# If we haven't done anything, then just pass through the input.
+	test -n "$DONE" || DONE="$TODO";
+	printf '%s' "$DONE";
+}
+
 starts_with(){
-	local STR;   STR="$1";
-	local QUERY; QUERY="$2";
-	test "${STR#$QUERY}" != "$STR";
-	return $?; # This may be redundant, but I'm doing it anyway for my sanity.
+	local STR="$1" QUERY="$2";
+	test "${STR#$QUERY}" != "$STR"; # implicit exit code return.
 }
 
 notify_close () {
-	i=${2} ;((${i}>0)) && sleep ${i:0:-3}.${i:$((${#i}-3))}
-	gdbus call ${NOTIFY_ARGS[@]} --method org.freedesktop.Notifications.CloseNotification "${1}" >&-
+	test "$2" -lt 1 || sleep "$(expr substr "$2" 0 $((${#2} - 3)))";
+	gdbus call $NOTIFY_ARGS --method org.freedesktop.Notifications.CloseNotification "$1" >&-;
 }
 
 process_urgency () {
@@ -100,64 +172,122 @@ process_urgency () {
 		0|low) URGENCY=0 ;;
 		1|normal) URGENCY=1 ;;
 		2|critical) URGENCY=2 ;;
-		*) abrt "Urgency values: 0 low 1 normal 2 critical" ;;
-	esac
+		*) abrt "urgency values are ( 0 => low; 1 => normal; 2 => critical )" ;;
+	esac;
 }
 
 process_category () {
-	local a c; IFS=, a=(${1});
-	for c in "${a[@]}"; do
-		make_hint string category "${c}" && HINTS+=(${_r})
-	done
-}
-
-make_hint () {
-	_r= ;local t=${1} n=${2} c=${3}
-	[[ ${t} =~ ^(byte|int32|double|string)$ ]] || abrt "Hint types: byte int32 double string"
-	[[ ${t} = string ]] && c="\"${3}\""
-	_r="\"${n}\":<${t} ${c}>"
+	local OIFS= c=;
+	OIFS="$IFS";
+	IFS=','; for c in $1; do
+		IFS="$OIFS";
+		process_hint "string:category:$c";
+		IFS=',';
+	done;
+	IFS="$OIFS";
 }
 
 process_hint () {
-	local a ;IFS=: a=(${1})
-	((${#a[@]}==3)) || abrt "Hint syntax: \"TYPE:NAME:VALUE\""
-	make_hint "${a[0]}" "${a[1]}" "${a[2]}" && HINTS+=(${_r})
+	local l=0 field= t= n= v=;
+
+	# Split argument into it's fields.
+	OIFS="$IFS"; IFS=':'; for field in $1; do
+		case "$l" in
+			0) t="$field";;
+			1) n="$field";;
+			2) v="$field";;
+		esac;
+		l=$((l+1));
+	done;
+	IFS="$OIFS";
+	test "$l" -eq 3 || abrt "hint syntax is \"TYPE:NAME:VALUE\".";
+
+	case "$t" in
+		byte|int32|double|string) true;;
+		*) abrt "hint types must be one of (byte, int32, double, string).";;
+	esac;
+
+	test -n "$n" || abrt "hint name cannot be empty.";
+
+	# Extra hint value typechecking
+	if test "$t" = 'int32' -a "$(typeof -g "$v")" -gt 1; then
+		abrt "hint type 'int32' expects whole numbers, Ex. (-Infinity... -1,0,1 ...Infinity).";
+	elif test "$t" = 'byte'; then
+		if test "$(typeof "$v")" != "uint"; then
+			abrt "hint type 'byte' expects unsigned number, Ex. (0,1,2 ...Infinity).";
+		elif test "$v" -gt 255; then
+			abrt "hint type 'byte' overflow, number must be (0-255).";
+		fi;
+	elif test "$t" = 'double' && test "$(typeof -g "$v")" -gt 2; then
+		abrt "hint type 'double'";
+	elif test "$t" = 'string'; then
+		# Add quote buffer to string values
+		c="\"$v\"";
+	fi;
+
+	HINTS="$HINTS,\"$n\":<$t $v>";
 }
 
 process_action () {
-	local a k ;IFS=: a=(${1})
-	((${#a[@]}==2)) || abrt "Action syntax: \"NAME:COMMAND\""
-	k=${#AKEYS[@]}
-	AKEYS+=("\"${k}\",\"${a[0]}\"")
-	ACMDS+=("${k}" "${a[1]}")
+	local l=0 field= n= c=;
+
+	# Split argument into it's fields.
+	OIFS="$IFS"; IFS=':'; for field in $1; do
+		case "$l" in
+			0) n="$field";;
+			1) c="$field";;
+		esac;
+		l=$((l+1));
+	done;
+	IFS="$OIFS";
+	test "$l" -eq 2 || abrt "action syntax is \"NAME:COMMAND\"";
+
+	test -n "$n" || abrt "action name cannot be empty.";
+
+	AKEYS="$AKEYS,\"$n\",\"$n\"";
+	ACMDS="$ACMDS \"$(sanitize_quote_escapes "$n")\" \"$(sanitize_quote_escapes "$c")\"";
 }
 
 # key=default: key:command and key:label, with empty label
 # key=close:   key:command, no key:label (no button for the on-close event)
 process_special_action () {
-	[[ "${2}" ]] || abrt "Command must not be empty"
-	[[ "${1}" != "close" ]] && AKEYS+=("\"${1}\",\"\"")
-	ACMDS+=("${1}" "${2}")
+	test -n "$2" || abrt "Command must not be empty";
+	if test "$1" = 'default'; then
+		# That documentation is really hard to read, yes this is correct.
+		AKEYS="$AKEYS,\"default\",\"Okay\"";
+	fi;
+
+	ACMDS="$ACMDS \"$(sanitize_quote_escapes "$1")\" \"$(sanitize_quote_escapes "$2")\"";
 }
 
 process_posargs () {
-	[[ "${1}" = -* ]] && ! ${positional} && abrt "Unknown option ${1}"
-	${summary_set} && BODY=${1} || SUMMARY=${1} summary_set=true
+	if test "$1" != "${1#-}" ; then
+		abrt "unknown option $1";
+	fi;
+
+	# TODO: Ensure these exist where necessary. Maybe extend functionality.
+	#       Could include some more verbose logging when a user's missing an arg.
+	BODY="$1";
+	SUMMARY="$2"; # This can be empty, so a null param is fine.
+
+	# Alert the user we weren't expecting any more arguments.
+	if test -n "$3"; then
+		abrt "unexpected positional argument \"$3\". See \"notify-send.sh --help\".";
+	fi;
 }
 
 ################################################################################
 ## Main Script
 
 ${DEBUG_NOTIFY_SEND:=false} && {
-	exec 2>${TMP}/.${SELF}.${$}.e
-	set -x
-	trap "set >&2" 0
+	exec 2>"$TMP/.$APP_NAME.$$.errlog";
+	set -x;
+	trap "set >&2" 0;
 }
 
 while test "$#" -gt 0; do
-	# s= i=0
 	case "$1" in
-		--) positional=true;;
+		#--) positional=true;;
 		-h|--help) help; exit 0;;
 		-v|--version) echo "v$VERSION"; exit 0;;
 		-f|--force-expire) export EXPLICIT_CLOSE=true;;
@@ -172,7 +302,7 @@ while test "$#" -gt 0; do
 		;;
 		-a|--app-name|--app-name=*)
 			starts_with "$1" '--app-name=' && s="${1#*=}" || { shift; s="$1"; };
-			export APP_NAME=$s;
+			export APP_NAME="$s";
 		;;
 		-i|--icon|--icon=*)
 			starts_with "$1" '--icon=' && s="${1#*=}" || { shift; s="$1"; };
@@ -200,49 +330,77 @@ while test "$#" -gt 0; do
 		;;
 		-r|--replace|--replace=*)
 			starts_with "$1" '--replace=' && s="${1#*=}" || { shift; s="$1"; };
+
+			test "$(typeof "$s")" = "uint" -a "$s" -gt 0 || \
+				abrt "ID must be a positive integer greater than 0, but was provided \"$s\".";
+
 			ID="$s";
 		;;
 		-R|--replace-file|--replace-file=*)
 			starts_with "$1" '--replace-file=' && s="${1#*=}" || { shift; s="$1"; };
+
 			ID_FILE="$s"; ! test -s "$ID_FILE" || read ID < "$ID_FILE";
 		;;
 		-s|--close|--close=*)
-			starts_with "$1" '--close=' && i="${1#*=}" || { shift; i="$1"; };
-			! is_int "$ID" || abrt 'ID should be an integer but was provided "$i".';
-			if test "$i" -lt 1 -a "$ID" -gt 0; then i="$ID"; fi;
+			starts_with "$1" '--close=' && s="${1#*=}" || { shift; s="$1"; };
 
-			# This has to look weird bc -e safe mode demands it.
-			test "$i" -gt 0 && notify_close "$i" "$EXPIRE_TIME" || exit "$?";
-			exit;
+			test "$(typeof "$s")" = "uint" -a "$s" -gt 0 || \
+				abrt "ID must be a positive integer greater than 0, but was provided \"$s\".";
+
+			ID="$s";
+
+			notify_close "$ID" "$EXPIRE_TIME";
+			exit $?;
 		;;
 		*)
-			process_posargs "$1";
+			# NOTE: breaking change from master. Will need to be reflected in
+			#       versioning. Before, the postitionals were mobile, but per the
+			#       reference, they aren't supposed to be. This simplifies the
+			#       application.
+			process_posargs "$*";
+			s="$#"; # Reuse for temporary storage of shifts remaining.
+			shift "$((s - 1))"; # Clear remaining arguments - 1 so the loop stops.
 		;;
 	esac;
 	shift;
 done;
 
-# build the actions & hints strings
-a= ;for s in "${AKEYS[@]}" ;do a+=,${s} ;done ;a=${a:1}
-make_hint byte urgency "${URGENCY}" ;h=${_r}
-for s in "${HINTS[@]}" ;do h+=,${s} ;done
-
 # send the dbus message, collect the notification ID
-typeset -i OLD_ID=${ID} NEW_ID=0
-s=$(gdbus call ${NOTIFY_ARGS[@]} \
+OLD_ID="$ID";
+NEW_ID=0;
+s="$(gdbus call --session \
+	--dest org.freedesktop.Notifications \
+	--object-path /org/freedesktop/Notifications \
 	--method org.freedesktop.Notifications.Notify \
-	"${APP_NAME}" ${ID} "${ICON}" "${SUMMARY}" "${BODY}" \
-	"[${a}]" "{${h}}" "int32 ${EXPIRE_TIME}")
+	"$APP_NAME" "uint32 $ID" "$ICON" "$SUMMARY" "$BODY" \
+	"[${AKEYS#,}]" "{\"urgency\":<byte $URGENCY>$HINTS}" \
+	"int32 ${EXPIRE_TIME}")";
 
 # process the ID
-s=${s%,*} NEW_ID=${s#* }
-((${NEW_ID}>0)) || abrt "invalid notification ID from gdbus"
-((${OLD_ID}>0)) || ID=${NEW_ID}
-[[ "${ID_FILE}" ]] && ((${OLD_ID}<1)) && echo ${ID} > "${ID_FILE}"
-${PRINT_ID} && echo ${ID}
+s="${s%,*}"; NEW_ID="${s#* }";
 
-# bg task to monitor dbus and perform the actions
-((${#ACMDS[@]}>0)) && setsid -f "${ACTION_SH}" ${ID} "${ACMDS[@]}" >&- 2>&- &
+
+if ! ( test "$(typeof "$NEW_ID")" = "uint" && test "$NEW_ID" -gt 1 ); then
+	abrt "invalid notification ID from gdbus.";
+fi;
+
+test "$OLD_ID" -gt 1 || ID=${NEW_ID};
+
+if test -n "$ID_FILE" -a "$OLD_ID" -lt 1; then
+	echo "$ID" > "$ID_FILE";
+fi;
+
+if $PRINT_ID; then
+	echo "$ID";
+fi;
+
+if test -n "$ACMDS"; then
+	# bg task to monitor dbus and perform the actions
+	eval "set $ACMDS"; # Force safe field expansion.
+	$ACTION_SH $ID $* >&- 2>&- &
+fi;
 
 # bg task to wait expire time and then actively close notification
-${EXPLICIT_CLOSE} && ((${EXPIRE_TIME}>0)) && setsid -f "${0}" -t ${EXPIRE_TIME} -s ${ID} >&- 2>&- <&- &
+if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -gt 0; then
+	setsid -f "$SELF" -t ${EXPIRE_TIME} -s ${ID} >&- 2>&- <&- &
+fi;
