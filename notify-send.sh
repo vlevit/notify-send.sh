@@ -44,6 +44,39 @@ HINTS=;
 
 . $PROCDIR/common.lib.sh; # Import shared code.
 
+# @describe - Allows you to filter characters from a given string. Note that
+#             using multiple strings will concatenate them into the output.
+# @usage - filter_chars FILTER STRING('s)...
+# @param (STRING's) - The string or strings you wish to sanitize.
+# @param FILTER - The number of passes to run sanitization, default is 1.
+filter_chars(){
+	local ESCAPES="$1" TODO= DONE= f= b= c=;
+
+	TODO="$*"; # must be set after the conditional shift.
+
+	while test -n "$TODO"; do
+		f="${TODO%%[$ESCAPES]*}"; # front of delimeter.
+		b="${TODO#*[$ESCAPES]}"; # back of delimeter.
+
+		# Only need to test one of the directions since $b and $f will be the same
+		# if this is true.
+		if test "$f" = "$TODO"; then break; fi;
+
+		# Capture chracter by removing front
+		test -z "$f" && c="$TODO" || c="${TODO#$f}";
+		# and rear segments if they exist.
+		test -z "$b"              || c="${c%$b}";
+
+		DONE="$DONE$f";
+		# Subtract front segment from TODO.
+		TODO="${TODO#$f$c}";
+	done;
+
+	# If we haven't done anything, then just pass through the input.
+	if test -z "$DONE"; then DONE="$TODO"; fi;
+	printf '%s' "$DONE";
+}
+
 help () {
 	echo -e 'Usage:';
 	echo -e '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
@@ -115,30 +148,39 @@ process_hint () {
 	done;
 	test "$l" -eq 3 || abrt "hint syntax is \"TYPE:NAME:VALUE\".";
 
+	# https://www.alteeve.com/w/List_of_DBus_data_types
+	# NOTE: I'm only implementing simple primitives here because I don't think
+	#       the notification server will need higher order data types.
+	#       I'm also lazy and don't feel like writing the code to parse anything
+	#       more challenging. If I see a GH issue for it, I'll consider support.
 	case "$t" in
-		byte|int32|double|string) true;;
-		*) abrt "hint types must be one of (byte, int32, double, string).";;
+		byte|uint16|uint32|uint64|int16|int32|int64|double|string|boolean) true;;
+		BYTE|UINT16|UINT32|UINT64|INT16|INT32|INT64|DOUBLE|STRING|BOOLEAN) true;;
+		*) abrt "hint types must be one of the datatypes listed the site below.
+https://www.alteeve.com/w/List_of_DBus_data_types";;
 	esac;
 
 	test -n "$n" || abrt "hint name cannot be empty.";
 
-	# Extra hint value typechecking
-	if test "$t" = 'int32' -a "$(typeof -g "$v")" -gt 1; then
-		abrt "hint type 'int32' expects whole numbers, Ex. (-Infinity... -1,0,1 ...Infinity).";
-	elif test "$t" = 'byte'; then
-		if test "$(typeof "$v")" != "uint"; then
-			abrt "hint type 'byte' expects unsigned number, Ex. (0,1,2 ...Infinity).";
-		elif test "$v" -gt 255; then
-			abrt "hint type 'byte' overflow, number must be (0-255).";
-		fi;
-	elif test "$t" = 'double' && test "$(typeof -g "$v")" -gt 2; then
-		abrt "hint type 'double'";
-	elif test "$t" = 'string'; then
+	# NOTE: Don't actually worry about extra typechecking for hints, since
+	#       if someone's using this script, they're probably educated enough
+	#       to figure out what GDBUS throws as its error.
+	if test "$t" = 'string'; then
 		# Add quote buffer to string values
 		v="\"$(sanitize_quote_escapes "$2")\"";
 	fi;
 
 	HINTS="$HINTS,\"$n\":<$t $v>";
+}
+
+process_capabilities() {
+	local c=;
+	eval "set $*"; # expand variables from pre-tic-quoted list.
+	for c in $*; do
+		case "$c" in
+			*) true; # Pass for now, need to back up my work.
+		esac;
+	done;
 }
 
 process_action () {
@@ -202,6 +244,16 @@ ${DEBUG_NOTIFY_SEND:=false} && {
 	set -x;
 	trap "set >&2" 0;
 }
+
+# Fetch notification server capabilities.
+s="$(gdbus call --session \
+		--dest org.freedesktop.Notifications \
+		--object-path /org/freedesktop/Notifications \
+		--method org.freedesktop.Notifications.GetCapabilities)";
+
+# Filter unnecessary characters.
+s="$(filter_chars "[]()," "$s")";
+process_capabilities "$s";
 
 while test "$#" -gt 0; do
 	case "$1" in

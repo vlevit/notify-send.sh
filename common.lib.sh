@@ -34,6 +34,7 @@ abrt () { echo "Error in '$SELF': $*" >&2; exit 1; }
 # @prints (2|'double') - When the input can be coerced into a floating number.
 # @prints (1|'int') - When the input can be coerced into a regular integer.
 # @prints (0|'uint') - When the input can be coereced into an unsigned integer.
+# @prints (Disabled|'binary') - When the input can be coerced into a binary value.
 typeof() {
 	local SIGNED=false FLOATING=false GROUP=false in='' f='' b='';
 
@@ -68,6 +69,16 @@ typeof() {
 		*)
 			if $FLOATING; then $GROUP && echo "2" || echo "double"; return; fi;
 			if $SIGNED; then $GROUP && echo "1" || echo "int"; return; fi;
+
+			# NOTE: I only added this explicitly because GDBUS needs it.
+			#       it registers strings of continuous ones and zeros as binary.
+			#
+			# NOTE: I was wrong, it accepts a decimal number only.
+			#
+			# if test "$in" = "${in#*[2-9]}"; then
+			# 	$GROUP && echo "0" || echo "binary";
+			# fi;
+
 			$GROUP && echo "0" || echo "uint";
 		;;
 	esac;
