@@ -23,57 +23,26 @@
 ################################################################################
 ## Globals (Comprehensive)
 
-# Symlink script resolution via coreutils
-SELF="/"$(readlink -n -f $0); x=${SELF%/*}; x=${x#/}; x=${x:-.};
-PROCDIR="$(cd "$x"; pwd)"; # Process direcotry.
-APP_NAME="${SELF##*/}";
+# Symlink script resolution via coreutils (exists on 95+% of linux systems.)
+SELF=$(readlink -n -f $0);
+PROCDIR="$(dirname "$SELF")"; # Process direcotry.
+APP_NAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
 VERSION="2.0.0-rc.m3tior"; # Changed to semantic versioning.
-ACTION_SH="$PROCDIR/notify-action.sh";
 EXPIRE_TIME=-1;
 ID=0;
 URGENCY=1;
 PRINT_ID=false;
 EXPLICIT_CLOSE=false;
-positional=false;
-SUMMARY=;
-BODY=;
-AKEYS=;
-ACMDS=;
+#positional=false;
+SUMMARY=; BODY=;
+AKEYS=; ACMDS=; ACTION_COUNT=0;
 HINTS=;
 
 ################################################################################
 ## Functions
 
-echo(){ printf '%b' "$*\n"; }
 abrt () { echo "Error in '$SELF': $*" >&2; exit 1; }
-
-help () {
-	echo 'Usage:';
-	echo '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
-	echo '';
-	echo 'Help Options:';
-	echo '\t-h|--help                      Show help options.';
-	echo '\t-v|--version                   Print version number.';
-	echo '';
-	echo 'Application Options:';
-	echo '\t-u, --urgency=LEVEL            Specifies the urgency level (low, normal, critical).';
-	echo '\t-t, --expire-time=TIME         Specifies the timeout in milliseconds at which to expire the notification.';
-	echo '\t-f, --force-expire             Forcefully closes the notification when the notification has expired.';
-	echo '\t-a, --app-name=APP_NAME        Specifies the app name for the icon.';
-	echo '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
-	echo '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
-	echo '\t-H, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
-	echo "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label.";
-	echo "\t                               COMMAND is a shell command executed when action is invoked.";
-	echo '\t-d, --default-action=COMMAND   Specifies the default action which is usually invoked by clicking the notification.';
-	echo '\t-l, --close-action=COMMAND     Specifies the action invoked when notification is closed.';
-	echo '\t-p, --print-id                 Print the notification ID to the standard output.';
-	echo '\t-r, --replace=ID               Replace existing notification.';
-	echo '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
-	echo '\t-s, --close=ID                 Close notification.';
-	echo '';
-}
 
 # @describe - Prints the simplest primitive type of a value.
 # @usage - typeof [-g] VALUE
@@ -126,35 +95,71 @@ typeof() {
 
 # @describe - Ensures any characters that are embeded inside quotes can
 #             be `eval`ed without worry of XSS / Parameter Injection.
-# @usage sanitize_quote_escapes STRING('s)...
+# @usage [-p COUNT] sanitize_quote_escapes STRING('s)...
 # @param STRING('s) - The string or strings you wish to sanitize.
+# @param COUNT - The number of passes to run sanitization, default is 1.
 sanitize_quote_escapes(){
-	local ESCAPES="\\\"\$" TODO="$*" DONE= f= b= c=;
-	while test -n "$TODO"; do
-		# NOTE: If the substring isn't found, IN_PROGRESS will be equivalent
-		#       to TODO. So it will erase TODO and should written to DONE on
-		#       the first pass.
+	local ESCAPES="\\\"\$" TODO= DONE= PASSES=1 l=0 f= b= c=;
 
-		f="${TODO%%[$ESCAPES]*}"; # front of delimeter.
-		b="${TODO#*[$ESCAPES]}"; # back of delimeter.
+	if test "$1" = '-p'; then PASSES="$2"; shift 2; fi;
 
-		# Only need to test one of the directions since $b and $f will be the same
-		# if this is true.
-		if test "$f" = "$TODO"; then break; fi;
+	TODO="$*"; # must be set after the conditional shift.
 
-		# Capture chracter by removing front
-		test -z "$f" && c="$TODO" || c="${TODO#$f}";
-		# and rear segments if they exist.
-		test -z "$b"              || c="${c%$b}";
+	while test "$l" -lt "$PASSES"; do
+		# Ensure we cycle TODO after the first pass.
+		if test "$l" -gt 0; then TODO="$DONE"; DONE=; fi;
 
-		DONE="$DONE$f\\$c";
-		# Subtract front segment from TODO.
-		TODO="${TODO#$f$c}";
+		while test -n "$TODO"; do
+			f="${TODO%%[$ESCAPES]*}"; # front of delimeter.
+			b="${TODO#*[$ESCAPES]}"; # back of delimeter.
+
+			# Only need to test one of the directions since $b and $f will be the same
+			# if this is true.
+			if test "$f" = "$TODO"; then break 2; fi;
+
+			# Capture chracter by removing front
+			test -z "$f" && c="$TODO" || c="${TODO#$f}";
+			# and rear segments if they exist.
+			test -z "$b"              || c="${c%$b}";
+
+			DONE="$DONE$f\\$c";
+			# Subtract front segment from TODO.
+			TODO="${TODO#$f$c}";
+		done;
+		l="$((l + 1))"; # Increment loop counter.
 	done;
 
 	# If we haven't done anything, then just pass through the input.
-	test -n "$DONE" || DONE="$TODO";
+	if test -z "$DONE"; then DONE="$TODO"; fi;
 	printf '%s' "$DONE";
+}
+
+
+help () {
+	echo -e 'Usage:';
+	echo -e '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
+	echo -e '';
+	echo -e 'Help Options:';
+	echo -e '\t-h|--help                      Show help options.';
+	echo -e '\t-v|--version                   Print version number.';
+	echo -e '';
+	echo -e 'Application Options:';
+	echo -e '\t-u, --urgency=LEVEL            Specifies the urgency level (low, normal, critical).';
+	echo -e '\t-t, --expire-time=TIME         Specifies the timeout in milliseconds at which to expire the notification.';
+	echo -e '\t-f, --force-expire             Forcefully closes the notification when the notification has expired.';
+	echo -e '\t-a, --app-name=APP_NAME        Specifies the app name for the icon.';
+	echo -e '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
+	echo -e '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
+	echo -e '\t-H, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
+	echo -e "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label.";
+	echo -e "\t                               COMMAND is a shell command executed when action is invoked.";
+	echo -e '\t-d, --default-action=COMMAND   Specifies the default action which is usually invoked by clicking the notification.';
+	echo -e '\t-l, --close-action=COMMAND     Specifies the action invoked when notification is closed.';
+	echo -e '\t-p, --print-id                 Print the notification ID to the standard output.';
+	echo -e '\t-r, --replace=ID               Replace existing notification.';
+	echo -e '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
+	echo -e '\t-s, --close=ID                 Close notification.';
+	echo -e '';
 }
 
 starts_with(){
@@ -177,29 +182,28 @@ process_urgency () {
 }
 
 process_category () {
-	local OIFS= c=;
-	OIFS="$IFS";
-	IFS=','; for c in $1; do
-		IFS="$OIFS";
+	local todo="$@" c=;
+	while test -n "$todo"; do
+		c="${todo%%,*}";
 		process_hint "string:category:$c";
-		IFS=',';
+		test "$todo" = "${todo#*,}" && break || todo="${todo#*,}";
 	done;
-	IFS="$OIFS";
 }
 
 process_hint () {
-	local l=0 field= t= n= v=;
+	local l=0 todo="$@" field= t= n= v=;
 
 	# Split argument into it's fields.
-	OIFS="$IFS"; IFS=':'; for field in $1; do
+	while test -n "$todo"; do
+		field="${todo%%:*}";
 		case "$l" in
 			0) t="$field";;
 			1) n="$field";;
 			2) v="$field";;
 		esac;
 		l=$((l+1));
+		if test "$todo" = "${todo#*:}"; then todo=; else todo="${todo#*:}"; fi;
 	done;
-	IFS="$OIFS";
 	test "$l" -eq 3 || abrt "hint syntax is \"TYPE:NAME:VALUE\".";
 
 	case "$t" in
@@ -222,30 +226,35 @@ process_hint () {
 		abrt "hint type 'double'";
 	elif test "$t" = 'string'; then
 		# Add quote buffer to string values
-		c="\"$v\"";
+		v="\"$(sanitize_quote_escapes "$2")\"";
 	fi;
 
 	HINTS="$HINTS,\"$n\":<$t $v>";
 }
 
 process_action () {
-	local l=0 field= n= c=;
+	local l=0 todo="$@" field= s= c=;
 
 	# Split argument into it's fields.
-	OIFS="$IFS"; IFS=':'; for field in $1; do
+	while test -n "$todo"; do
+		field="${todo%%:*}";
 		case "$l" in
-			0) n="$field";;
+			0) s="$field";;
 			1) c="$field";;
 		esac;
 		l=$((l+1));
+		test "$todo" = "${todo#*:}" && break || todo="${todo#*:}";
 	done;
-	IFS="$OIFS";
 	test "$l" -eq 2 || abrt "action syntax is \"NAME:COMMAND\"";
 
-	test -n "$n" || abrt "action name cannot be empty.";
+	test -n "$s" || abrt "action name cannot be empty.";
 
-	AKEYS="$AKEYS,\"$n\",\"$n\"";
-	ACMDS="$ACMDS \"$(sanitize_quote_escapes "$n")\" \"$(sanitize_quote_escapes "$c")\"";
+	# The user isn't intended to be able to interact with our notifications
+	# outside this application, so keep the API simple and use numbers
+	# for each custom action.
+	ACTION_COUNT="$((ACTION_COUNT + 1))";
+	AKEYS="$AKEYS,\"$ACTION_COUNT\",\"$s\"";
+	ACMDS="$ACMDS \"$ACTION_COUNT\" \"$(sanitize_quote_escapes "$c")\"";
 }
 
 # key=default: key:command and key:label, with empty label
@@ -257,7 +266,7 @@ process_special_action () {
 		AKEYS="$AKEYS,\"default\",\"Okay\"";
 	fi;
 
-	ACMDS="$ACMDS \"$(sanitize_quote_escapes "$1")\" \"$(sanitize_quote_escapes "$2")\"";
+	ACMDS="$ACMDS \"$1\" \"$(sanitize_quote_escapes "$2")\"";
 }
 
 process_posargs () {
@@ -396,11 +405,14 @@ fi;
 
 if test -n "$ACMDS"; then
 	# bg task to monitor dbus and perform the actions
-	eval "set $ACMDS"; # Force safe field expansion.
-	$ACTION_SH $ID $* >&- 2>&- &
+	# Uses field expansion to form string based array.
+	# Also, use deterministic execution for the rare instance where
+	# the filesystem doesn't support linux executable permissions bit,
+	# or it's been left unset by a package manager.
+	eval "/bin/sh $PROCDIR/notify-action.sh $ID $ACMDS &";
 fi;
 
 # bg task to wait expire time and then actively close notification
 if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -gt 0; then
-	setsid -f "$SELF" -t ${EXPIRE_TIME} -s ${ID} >&- 2>&- <&- &
+	setsid -f /bin/sh "$SELF" -t "$EXPIRE_TIME" -s "$ID" & # >&- 2>&- <&-
 fi;

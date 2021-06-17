@@ -24,11 +24,11 @@
 ## Globals (Comprehensive)
 
 # Symlink script resolution via coreutils
-SELF="/"$(readlink -n -f $0); x=${SELF%/*}; x=${x#/}; x=${x:-.};
-PROCDIR=$(cd "$x"; pwd); # Process direcotry.
+SELF=$(readlink -n -f $0);
+PROCDIR="$(dirname "$SELF")"; # Process direcotry.
+APP_NAME="$(basename "$SELF")";
 TMP=${XDG_RUNTIME_DIR:-/tmp}; # XDG standard runtime directory.
 GDBUS_PIDF=$TMP/${APP_NAME:=${SELF##*/}}.$$.dat;
-SEND_SH=$PROCDIR/notify-send.sh;
 ACTIONC=0;
 #CONCLUDED=; Used to bugfix the exit handler.
 #ID=; # Current shell's target ID.
@@ -42,17 +42,107 @@ ACTIONC=0;
 ################################################################################
 ## Functions
 
-echo(){ printf '%b' "$*\n"; }
-abrt () { echo "$SELF: $*" >&2; exit 1; }
+abrt () { echo "Error in '$SELF': $*" >&2; exit 1; }
+
+# @describe - Prints the simplest primitive type of a value.
+# @usage - typeof [-g] VALUE
+# @param "-g" - Toggles the numerical return values which increase in order of inclusivity.
+# @param VALUE - The value you wish to check.
+# @prints (5|'string') - When no other primitive can be coerced from the input.
+# @prints (4|'filename') - When a string primitive is safe to use as a filename.
+# @prints (3|'alphanum') - When a string primitive only contains letters and numbers.
+# @prints (2|'double') - When the input can be coerced into a floating number.
+# @prints (1|'int') - When the input can be coerced into a regular integer.
+# @prints (0|'uint') - When the input can be coereced into an unsigned integer.
+typeof() {
+	local SIGNED=false FLOATING=false GROUP=false in='' f='' b='';
+
+	# Check for group return parameter.
+	if test "$1" = "-g"; then GROUP=true; shift; fi;
+
+	in="$*";
+
+	# Check for negation sign.
+	test "$in" = "${b:=${in#-}}" || SIGNED=true;
+	in="$b"; b='';
+
+	# Check for floating point.
+	if test "$in" != "${b:=${in#*.}}" -a "$in" != "${f:=${in%.*}}"; then
+		if test "$in" != "$f.$b"; then
+			$GROUP && echo "5" || echo "string"; return;
+		fi;
+		FLOATING=true;
+	fi;
+
+	case "$in" in
+		''|*[!0-9\.]*)
+			if test "$in" != "${in#*[~\`\!@\#\$%\^\*()\+=\{\}\[\]|:;\"\'<>,?\/]}"; then
+				$GROUP && echo "5" || echo "string";
+			else
+				if test "$in" != "${1#*[_\-.\\ ]}"; then
+					$GROUP && echo "4" || echo "filename";
+				else
+					$GROUP && echo "3" || echo "alphanum";
+				fi;
+			fi;;
+		*)
+			if $FLOATING; then $GROUP && echo "2" || echo "double"; return; fi;
+			if $SIGNED; then $GROUP && echo "1" || echo "int"; return; fi;
+			$GROUP && echo "0" || echo "uint";
+		;;
+	esac;
+}
+
+# @describe - Ensures any characters that are embeded inside quotes can
+#             be `eval`ed without worry of XSS / Parameter Injection.
+# @usage [-p COUNT] sanitize_quote_escapes STRING('s)...
+# @param STRING('s) - The string or strings you wish to sanitize.
+# @param COUNT - The number of passes to run sanitization, default is 1.
+sanitize_quote_escapes(){
+	local ESCAPES="\\\"\$" TODO= DONE= PASSES=1 l=0 f= b= c=;
+
+	if test "$1" = '-p'; then PASSES="$2"; shift 2; fi;
+
+	TODO="$*"; # must be set after the conditional shift.
+
+	while test "$l" -lt "$PASSES"; do
+		# Ensure we cycle TODO after the first pass.
+		if test "$l" -gt 0; then TODO="$DONE"; DONE=; fi;
+
+		while test -n "$TODO"; do
+			f="${TODO%%[$ESCAPES]*}"; # front of delimeter.
+			b="${TODO#*[$ESCAPES]}"; # back of delimeter.
+
+			# Only need to test one of the directions since $b and $f will be the same
+			# if this is true.
+			if test "$f" = "$TODO"; then break 2; fi;
+
+			# Capture chracter by removing front
+			test -z "$f" && c="$TODO" || c="${TODO#$f}";
+			# and rear segments if they exist.
+			test -z "$b"              || c="${c%$b}";
+
+			DONE="$DONE$f\\$c";
+			# Subtract front segment from TODO.
+			TODO="${TODO#$f$c}";
+		done;
+		l="$((l + 1))"; # Increment loop counter.
+	done;
+
+	# If we haven't done anything, then just pass through the input.
+	if test -z "$DONE"; then DONE="$TODO"; fi;
+	printf '%s' "$DONE";
+}
+
 
 do_action () {
-	local ACTION; ACTION="$(eval echo \$ACTION_"${1}")";
+	local ACTION; eval "ACTION=\$ACTION_$1";
 	if test -n "$ACTION"; then
-		# Close all the file descriptors for this event.
-		setsid -f "$ACTION" >&- 2>&- <&- &
-		# Confused what this does. Looks like a feature but would terminate after
-		# any action, so that makes me think it's an anti-feature. What the heck?
-		${EXPLICIT_CLOSE:=false} && $SEND_SH -s "$ID";
+		# Call setsid to execute the action in a new session.
+		setsid /bin/sh -c "$($ACTION)" &;
+		if ${EXPLICIT_CLOSE:=false}; then
+			/bin/sh "$PROCDIR/notify-send.sh" -s "$ID";
+		fi;
 	fi;
 }
 
@@ -77,46 +167,46 @@ conclude () {
 ## Main Script
 
 # Use parameter substitution to toggle debug.
-${DEBUG_NOTIFY_SEND:=false} && {
-	exec 2>"$TMP/$APP_NAME.$$.log";
+if ${DEBUG_NOTIFY_SEND:=false}; then
+	exec 2>"$TMP/$APP_NAME.$$.errlog";
 	set -x;
-	trap "set >&2" EXIT HUP INT QUIT ABRT KILL TERM; # Print everything to stderr.
-}
+	trap "set >&2" EXIT; # Print everything to stderr.
+fi;
 
 if test "$1" = "--help" -o "$1" = "-h"; then
-	# TODO: Create help and CLI for this application to make it more user freindly.
-	#       gotta help people understand what the hell's going on.
-	echo 'Usage: notify-action.sh ID ACTION_KEY VALUE [[ACTION_KEY] [VALUE]]...';
-	echo 'Description:';
-	echo "\tA suplemental utility for notify-send.sh that handles action events.";
-	echo;
-	echo 'Help Options:';
-	echo '\t-h|--help           Show help options';
-	echo;
-	echo 'Positional Arguments:';
-	echo '\tID          - The event ID to handle.';
-	echo '\tACTION_KEY  - The name of the event to handle.';
-	echo '\tVALUE       - The action to be taken when the event fires.';
+	echo -e 'Usage: notify-action.sh ID ACTION_KEY VALUE [[ACTION_KEY] [VALUE]]...';
+	echo -e 'Description:';
+	echo -e "\tA suplemental utility for notify-send.sh that handles action events.";
+	echo -e;
+	echo -e 'Help Options:';
+	echo -e '\t-h|--help           Show help options';
+	echo -e;
+	echo -e 'Positional Arguments:';
+	echo -e '\tID          - The event ID to handle.';
+	echo -e '\tACTION_KEY  - The name of the event to handle.';
+	echo -e '\tVALUE       - The action to be taken when the event fires.';
 	exit;
 fi;
 
 # consume the command line
 test -n "${ID:=$1}" || abrt "No notification id provided."; shift;
-case "$ID" in
-	''|*[!0-9]*) abrt "ID must be integer type.";;
-esac;
+test "$(typeof "$ID")" = "uint" || abrt "ID must be unsigned integer type.";
 
 while test ${#} -gt 0; do
-	ACTIONC=$((ACTIONC+1));
 	# I don't like using eval, but it's the simplest way of getting this done
 	# in a portable way. TODO: make this more secure in the future.
-	for x in $1; do true; done;
-	eval "ACTION_$x=\"$2\"";
+	if test "$(typeof -g "$1")" -lt 4; then
+		 abrt "action key must not contain special characters.";
+	fi;
+
+	eval "ACTION_$1=\"$2\"";
 
 	# Throw error when key is supplied without action value.
 	test -n "$2" || abrt "Action #$ACTIONC supplied key without value.";
 
 	shift 2;
+
+	ACTIONC=$((ACTIONC+1));
 done;
 test "$ACTIONC" -gt 0 || abrt "No action provided.";
 
