@@ -39,6 +39,18 @@ SUMMARY=; BODY=;
 AKEYS=; ACMDS=; ACTION_COUNT=0;
 HINTS=;
 
+# Capability Flags (these are used later with the ${var:=false} matcher)
+#SERVER_HAS_ACTION_ICONS="false";
+#SERVER_HAS_ACTIONS="false";
+#SERVER_HAS_BODY="false";
+#SERVER_HAS_BODY_HYPERLINKS="false";
+#SERVER_HAS_BODY_IMAGES="false";
+#SERVER_HAS_BODY_MARKUP="false";
+#SERVER_HAS_ICON_MULTI="false";
+#SERVER_HAS_ICON_STATIC="false";
+#SERVER_HAS_PERSISTENCE="false";
+#SERVER_HAS_SOUND="false";
+
 ################################################################################
 ## Functions
 
@@ -49,7 +61,7 @@ HINTS=;
 #             using multiple strings will concatenate them into the output.
 # @usage - filter_chars FILTER STRING('s)...
 # @param (STRING's) - The string or strings you wish to sanitize.
-# @param FILTER - The number of passes to run sanitization, default is 1.
+# @param FILTER - A string containing all the characters you wish to filter.
 filter_chars(){
 	local ESCAPES="$1" DONE= f=; shift;
 
@@ -60,9 +72,36 @@ filter_chars(){
 	printf '%s' "$DONE";
 }
 
+# @describe - Allows you to filter shell patterns from a given string. Note that
+#             using multiple strings will concatenate them into the output.
+#
+#             BIG NOTE: It's advised the first string always use tics '' instead
+#             of full quotes "", because using full quotes makes it harder to
+#             read what the actual pattern will look like after it's gone
+#             through two cycles of escape sanitization.
+#
+# @usage - filter_chars FILTER STRING('s)...
+# @param (STRING's) - The string or strings you wish to sanitize.
+# @param FILTER - A POSIX shell pattern to be removed from the input.
+filter_pattern(){
+	local FILTER="$1" DONE= TODO= f= b=; shift; TODO="$*";
+
+	while -n "$TODO"; do
+		f="${TODO%%$FILTER*}";
+		b="${TODO#*$FILTER}";
+		if test "$f" = "$TODO"; then
+			DONE="$DONE$TODO"; break;
+		fi;
+		DONE="$DONE$f";
+		TODO="$b";
+	done;
+
+	printf '%s' "$DONE";
+}
+
 help () {
 	echo 'Usage:';
-	echo '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
+	echo '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - creates a notification';
 	echo '';
 	echo 'Help Options:';
 	echo '\t-h|--help                      Show help options.';
@@ -76,9 +115,9 @@ help () {
 	echo '\t-a, --app-name=APP_NAME        Specifies the app name for the icon.';
 	echo '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
 	echo '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
-	echo '\t-H, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
+	echo '\t-H, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Supports all GDBUS simple primitives.';
 	echo "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label.";
-	echo "\t                               COMMAND is a shell script executed when action is invoked with the calling users default shell.";
+	echo "\t                               COMMAND is a script executed when action is invoked within the users default shell.";
 	echo '\t-d, --default-action=COMMAND   Specifies the default action which is usually invoked by clicking the notification.';
 	echo '\t-l, --close-action=COMMAND     Specifies the action invoked when notification is closed.';
 	echo '\t-p, --print-id                 Print the notification ID to the standard output.';
@@ -161,7 +200,16 @@ process_capabilities() {
 	eval "set $*"; # expand variables from pre-tic-quoted list.\
 	for c in $*; do
 		case "$c" in
-			*) true; # Pass for now, need to back up my work.
+			action-icons)       SERVER_HAS_ACTION_ICONS="true";;
+			actions)            SERVER_HAS_ACTIONS="true";;
+			body)               SERVER_HAS_BODY="true";;
+			body-hyperlinks)    SERVER_HAS_BODY_HYPERLINKS="true";;
+			body-images)        SERVER_HAS_BODY_IMAGES="true";;
+			body-markup)        SERVER_HAS_BODY_MARKUP="true";;
+			icon-multi)         SERVER_HAS_ICON_MULTI="true";;
+			icon-static)        SERVER_HAS_ICON_STATIC="true";;
+			persistence)        SERVER_HAS_PERSISTENCE="true";;
+			sound)              SERVER_HAS_SOUND="true";;
 		esac;
 	done;
 }
@@ -239,6 +287,12 @@ while test "$#" -gt 0; do
 		;;
 		-i|--icon|--icon=*)
 			starts_with "$1" '--icon=' && s="${1#*=}" || { shift; s="$1"; };
+
+			# NOTE: We don't need to assist the search path at all or modify
+			#       the path into a URI, I misunderstood the spec.
+			# THEME=$(gsettings get org.gnome.desktop.interface icon-theme)
+			# ICON="$(readlink -n -f "$s")";
+
 			ICON="$s";
 		;;
 		-c|--category|--category=*)
@@ -298,12 +352,41 @@ while test "$#" -gt 0; do
 			# TODO: Ensure these exist where necessary. Maybe extend functionality.
 			#       Could include some more verbose logging when a user's missing an arg.
 			SUMMARY="$1"; # This can be empty, so a null param is fine.
-			BODY="$2";
+
+			if ${SERVER_HAS_BODY:=false}; then
+				echo "Warning: Omitting body text because the notification server doesn't support it." >&2;
+				BODY="$2";
+				if ${SERVER_HAS_BODY_MARKUP:=false}; then
+					if ${SERVER_HAS_BODY_HYPERLINKS:=false}; then
+						echo "Warning: The notification service on your device doesn't support" >&2;
+						echo "         hyperlinks in it's body text. So they will be filtered out." >&2;
+						BODY="$(filter_pattern '<a href="*">' "$BODY")";
+						BODY="$(filter_pattern '<a/>' "$BODY")";
+					fi;
+					if ${SERVER_HAS_BODY_IMAGES:=false}; then
+						echo "Warning: The notification service on your device doesn't support" >&2;
+						echo "         images in it's body text. So they will be filtered out." >&2;
+						BODY="$(filter_pattern '<img */>' "$BODY")";
+					fi;
+				else
+					echo "Warning: The notification service on your device doesn't support" >&2;
+					echo "         markup in it's body text. So it will be filtered out." >&2;
+					# Filter every markup;
+					# NOTE: This isn't a fucking XML AST okay?! I don't have time to write
+					#       that in /bin/sh, as cool as that would be. So this may break
+					#       in extreme certain circumstances.
+					BODY="$(filter_pattern '<[biu]>' "$BODY")";
+					BODY="$(filter_pattern '<a href="*">' "$BODY")";
+					BODY="$(filter_pattern '<[biua]/>' "$BODY")";
+					BODY="$(filter_pattern '<img */>' "$BODY")";
+				fi;
+			fi;
 
 			# Alert the user we weren't expecting any more arguments.
 			if test -n "$3"; then
 				abrt "unexpected positional argument \"$3\". See \"notify-send.sh --help\".";
 			fi;
+
 			s="$#"; # Reuse for temporary storage of shifts remaining.
 			shift "$((s - 1))"; # Clear remaining arguments - 1 so the loop stops.
 		;;

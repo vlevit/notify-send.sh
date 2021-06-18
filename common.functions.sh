@@ -86,7 +86,6 @@ sanitize_pattern_escapes(){
 	IFS='"\$[]*'; for f in $TODO; do
 		# Since $f cannot contain unsafe chars, we can test against it.
 		c=;
-		test "${TODO#${DONE}${f}\"}" = "$TODO" || c='\"';
 		test "${TODO#${DONE}${f}\\}" = "$TODO" || c='\\';
 		test "${TODO#${DONE}${f}\$}" = "$TODO" || c='\$';
 		test "${TODO#${DONE}${f}\*}" = "$TODO" || c='\*';
