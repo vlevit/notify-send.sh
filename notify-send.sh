@@ -60,30 +60,30 @@ filter_chars(){
 }
 
 help () {
-	echo -e 'Usage:';
-	echo -e '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
-	echo -e '';
-	echo -e 'Help Options:';
-	echo -e '\t-h|--help                      Show help options.';
-	echo -e '\t-v|--version                   Print version number.';
-	echo -e '';
-	echo -e 'Application Options:';
-	echo -e '\t-u, --urgency=LEVEL            Specifies the urgency level (low, normal, critical).';
-	echo -e '\t-t, --expire-time=TIME         Specifies the timeout in milliseconds at which to expire the notification.';
-	echo -e '\t-f, --force-expire             Forcefully closes the notification when the notification has expired.';
-	echo -e '\t-a, --app-name=APP_NAME        Specifies the app name for the icon.';
-	echo -e '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
-	echo -e '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
-	echo -e '\t-H, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
-	echo -e "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label.";
-	echo -e "\t                               COMMAND is a shell command executed when action is invoked.";
-	echo -e '\t-d, --default-action=COMMAND   Specifies the default action which is usually invoked by clicking the notification.';
-	echo -e '\t-l, --close-action=COMMAND     Specifies the action invoked when notification is closed.';
-	echo -e '\t-p, --print-id                 Print the notification ID to the standard output.';
-	echo -e '\t-r, --replace=ID               Replace existing notification.';
-	echo -e '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
-	echo -e '\t-s, --close=ID                 Close notification.';
-	echo -e '';
+	echo 'Usage:';
+	echo '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification';
+	echo '';
+	echo 'Help Options:';
+	echo '\t-h|--help                      Show help options.';
+	echo '\t-v|--version                   Print version number.';
+	echo '';
+	echo 'Application Options:';
+	echo '\t-u, --urgency=LEVEL            Specifies the urgency level (low, normal, critical).';
+	echo '\t-t, --expire-time=TIME         Specifies the timeout in milliseconds at which to expire the notification.';
+	echo '\t-f, --force-expire             Forcefully closes the notification when the notification has expired.';
+	echo '\t-a, --app-name=APP_NAME        Specifies the app name for the icon.';
+	echo '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
+	echo '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
+	echo '\t-H, --hint=TYPE:NAME:VALUE     Specifies basic extra data to pass. Valid types are int, double, string and byte.';
+	echo "\t-o, --action=LABEL:COMMAND     Specifies an action. Can be passed multiple times. LABEL is usually a button's label.";
+	echo "\t                               COMMAND is a shell script executed when action is invoked with the calling users default shell.";
+	echo '\t-d, --default-action=COMMAND   Specifies the default action which is usually invoked by clicking the notification.';
+	echo '\t-l, --close-action=COMMAND     Specifies the action invoked when notification is closed.';
+	echo '\t-p, --print-id                 Print the notification ID to the standard output.';
+	echo '\t-r, --replace=ID               Replace existing notification.';
+	echo '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
+	echo '\t-s, --close=ID                 Close notification.';
+	echo '';
 }
 
 starts_with(){
@@ -202,22 +202,6 @@ process_special_action () {
 	ACMDS="$ACMDS \"$1\" \"$(sanitize_quote_escapes "$2")\"";
 }
 
-process_posargs () {
-	if test "$1" != "${1#-}" ; then
-		abrt "unknown option $1";
-	fi;
-
-	# TODO: Ensure these exist where necessary. Maybe extend functionality.
-	#       Could include some more verbose logging when a user's missing an arg.
-	BODY="$1";
-	SUMMARY="$2"; # This can be empty, so a null param is fine.
-
-	# Alert the user we weren't expecting any more arguments.
-	if test -n "$3"; then
-		abrt "unexpected positional argument \"$3\". See \"notify-send.sh --help\".";
-	fi;
-}
-
 ################################################################################
 ## Main Script
 
@@ -297,7 +281,7 @@ while test "$#" -gt 0; do
 
 			ID="$s";
 
-			notify_close "$ID" "$EXPIRE_TIME";
+			notify_close "$ID" "0";
 			exit $?;
 		;;
 		*)
@@ -305,7 +289,19 @@ while test "$#" -gt 0; do
 			#       versioning. Before, the postitionals were mobile, but per the
 			#       reference, they aren't supposed to be. This simplifies the
 			#       application.
-			process_posargs "$*";
+			if test "$1" != "${1#-}" ; then
+				abrt "unknown option $1";
+			fi;
+
+			# TODO: Ensure these exist where necessary. Maybe extend functionality.
+			#       Could include some more verbose logging when a user's missing an arg.
+			SUMMARY="$1"; # This can be empty, so a null param is fine.
+			BODY="$2";
+
+			# Alert the user we weren't expecting any more arguments.
+			if test -n "$3"; then
+				abrt "unexpected positional argument \"$3\". See \"notify-send.sh --help\".";
+			fi;
 			s="$#"; # Reuse for temporary storage of shifts remaining.
 			shift "$((s - 1))"; # Clear remaining arguments - 1 so the loop stops.
 		;;
@@ -356,5 +352,5 @@ fi;
 
 # bg task to wait expire time and then actively close notification
 if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -gt 0; then
-	/bin/sh "$SELF" -f -t "$EXPIRE_TIME" -s "$ID" >&- <&- & #  2>&-
+	/bin/sh "$SELF" -t "$EXPIRE_TIME" -s "$ID" >&- <&- & #  2>&-
 fi;

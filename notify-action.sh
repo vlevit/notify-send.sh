@@ -49,12 +49,12 @@ ACTIONC=0;
 ## Functions
 
 do_action () {
-	local ACTION; eval "ACTION=\$ACTION_$1";
+	local ACTION; eval "ACTION=\"\$ACTION_$1\"";
 	if test -n "$ACTION"; then
 		# Call setsid to execute the action in a new session.
 		setsid $SHELL -c "$($ACTION)" &;
 		if ${EXPLICIT_CLOSE:=false}; then
-			/bin/sh "$PROCDIR/notify-send.sh" -s "$ID";
+			/bin/sh "$PROCDIR/notify-send.sh" -f -s "$ID";
 		fi;
 	fi;
 }
@@ -82,17 +82,17 @@ conclude () {
 # NOTE: Extra setup of STDIO done in common.lib.sh
 
 if test "$1" = "--help" -o "$1" = "-h"; then
-	echo -e 'Usage: notify-action.sh ID ACTION_KEY VALUE [[ACTION_KEY] [VALUE]]...';
-	echo -e 'Description:';
-	echo -e "\tA suplemental utility for notify-send.sh that handles action events.";
-	echo -e;
-	echo -e 'Help Options:';
-	echo -e '\t-h|--help           Show help options';
-	echo -e;
-	echo -e 'Positional Arguments:';
-	echo -e '\tID          - The event ID to handle.';
-	echo -e '\tACTION_KEY  - The name of the event to handle.';
-	echo -e '\tVALUE       - The action to be taken when the event fires.';
+	echo 'Usage: notify-action.sh ID ACTION_KEY VALUE [[ACTION_KEY] [VALUE]]...';
+	echo 'Description:';
+	echo "\tA suplemental utility for notify-send.sh that handles action events.";
+	echo;
+	echo 'Help Options:';
+	echo '\t-h|--help           Show help options';
+	echo;
+	echo 'Positional Arguments:';
+	echo '\tID          - The event ID to handle.';
+	echo '\tACTION_KEY  - The name of the event to handle.';
+	echo '\tVALUE       - The action to be taken when the event fires.';
 	exit;
 fi;
 
@@ -101,13 +101,11 @@ test -n "${ID:=$1}" || abrt "No notification id provided."; shift;
 test "$(typeof "$ID")" = "uint" || abrt "ID must be unsigned integer type.";
 
 while test ${#} -gt 0; do
-	# I don't like using eval, but it's the simplest way of getting this done
-	# in a portable way. TODO: make this more secure in the future.
 	if test "$(typeof -g "$1")" -lt 4; then
 		 abrt "action key must not contain special characters.";
 	fi;
 
-	eval "ACTION_$1=\"$2\"";
+	eval "ACTION_$1=\"$(sanitize_quote_escapes "$2")\"";
 
 	# Throw error when key is supplied without action value.
 	test -n "$2" || abrt "Action #$ACTIONC supplied key without value.";
