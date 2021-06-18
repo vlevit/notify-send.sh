@@ -22,6 +22,7 @@
 ################################################################################
 ## Functions
 
+echo() { printf '%b\n' "$*"; }
 abrt () { echo "Error in '$SELF': $*" >&2; exit 1; }
 
 # @describe - Prints the simplest primitive type of a value.
@@ -124,6 +125,7 @@ sanitize_quote_escapes(){
 			test "${TODO#${DONE}${f}\"}" = "$TODO" || c='\"';
 			test "${TODO#${DONE}${f}\\}" = "$TODO" || c='\\';
 			test "${TODO#${DONE}${f}\$}" = "$TODO" || c='\$';
+			test "${TODO#${DONE}${f}\`}" = "$TODO" || c='\`';
 			DONE="$DONE$f$c";
 		done;
 		l="$((l + 1))"; # Increment loop counter.
