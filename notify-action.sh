@@ -21,9 +21,9 @@
 # https://developer.gnome.org/notification-spec/
 
 ################################################################################
-## Globals (Comprehensive)
+## Globals (Comprehensive - common.setup)
 
-# Symlink script resolution via coreutils
+# Symlink script resolution via coreutils (exists on 95+% of linux systems.)
 SELF=$(readlink -n -f $0);
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
 APP_NAME="$(basename "$SELF")";
@@ -40,15 +40,19 @@ ACTIONC=0;
 #d=; # DISPLAY extracted from external files.
 
 ################################################################################
-## Functions
+## Imports
 
-. $PROCDIR/common.lib.sh; # Import shared code.
+. $PROCDIR/common.functions.sh; # Import shared code.
+. $PROCDIR/common.setup.sh; # Ensures we have debug and logfile stuff together.
+
+################################################################################
+## Functions
 
 do_action () {
 	local ACTION; eval "ACTION=\$ACTION_$1";
 	if test -n "$ACTION"; then
 		# Call setsid to execute the action in a new session.
-		setsid /bin/sh -c "$($ACTION)" &;
+		setsid $SHELL -c "$($ACTION)" &;
 		if ${EXPLICIT_CLOSE:=false}; then
 			/bin/sh "$PROCDIR/notify-send.sh" -s "$ID";
 		fi;
@@ -75,12 +79,7 @@ conclude () {
 ################################################################################
 ## Main Script
 
-# Use parameter substitution to toggle debug.
-if ${DEBUG_NOTIFY_SEND:=false}; then
-	exec 2>"$TMP/$APP_NAME.$$.errlog";
-	set -x;
-	trap "set >&2" EXIT; # Print everything to stderr.
-fi;
+# NOTE: Extra setup of STDIO done in common.lib.sh
 
 if test "$1" = "--help" -o "$1" = "-h"; then
 	echo -e 'Usage: notify-action.sh ID ACTION_KEY VALUE [[ACTION_KEY] [VALUE]]...';

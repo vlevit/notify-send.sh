@@ -21,14 +21,13 @@
 # https://developer.gnome.org/notification-spec/
 
 ################################################################################
-## Globals (Comprehensive)
+## Globals (Comprehensive - common.setup)
 
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
 SELF=$(readlink -n -f $0);
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
 APP_NAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
-VERSION="2.0.0-rc.m3tior"; # Changed to semantic versioning.
 EXPIRE_TIME=-1;
 ID=0;
 URGENCY=1;
@@ -42,7 +41,8 @@ HINTS=;
 ################################################################################
 ## Functions
 
-. $PROCDIR/common.lib.sh; # Import shared code.
+. $PROCDIR/common.functions.sh; # Import shared code.
+. $PROCDIR/common.setup.sh; # Ensures we have debug and logfile stuff together.
 
 # @describe - Allows you to filter characters from a given string. Note that
 #             using multiple strings will concatenate them into the output.
@@ -50,30 +50,12 @@ HINTS=;
 # @param (STRING's) - The string or strings you wish to sanitize.
 # @param FILTER - The number of passes to run sanitization, default is 1.
 filter_chars(){
-	local ESCAPES="$1" TODO= DONE= f= b= c=;
+	local ESCAPES="$1" DONE= f=; shift;
 
-	TODO="$*"; # must be set after the conditional shift.
+	OIFS="$IFS";
+	IFS="$ESCAPES"; for f in $*; do DONE="$DONE$f"; done;
+	IFS="$OIFS";
 
-	while test -n "$TODO"; do
-		f="${TODO%%[$ESCAPES]*}"; # front of delimeter.
-		b="${TODO#*[$ESCAPES]}"; # back of delimeter.
-
-		# Only need to test one of the directions since $b and $f will be the same
-		# if this is true.
-		if test "$f" = "$TODO"; then break; fi;
-
-		# Capture chracter by removing front
-		test -z "$f" && c="$TODO" || c="${TODO#$f}";
-		# and rear segments if they exist.
-		test -z "$b"              || c="${c%$b}";
-
-		DONE="$DONE$f";
-		# Subtract front segment from TODO.
-		TODO="${TODO#$f$c}";
-	done;
-
-	# If we haven't done anything, then just pass through the input.
-	if test -z "$DONE"; then DONE="$TODO"; fi;
 	printf '%s' "$DONE";
 }
 
@@ -175,7 +157,7 @@ https://www.alteeve.com/w/List_of_DBus_data_types";;
 
 process_capabilities() {
 	local c=;
-	eval "set $*"; # expand variables from pre-tic-quoted list.
+	eval "set $*"; # expand variables from pre-tic-quoted list.\
 	for c in $*; do
 		case "$c" in
 			*) true; # Pass for now, need to back up my work.
@@ -239,11 +221,7 @@ process_posargs () {
 ################################################################################
 ## Main Script
 
-${DEBUG_NOTIFY_SEND:=false} && {
-	exec 2>"$TMP/.$APP_NAME.$$.errlog";
-	set -x;
-	trap "set >&2" 0;
-}
+# NOTE: Extra setup of STDIO done in common.lib.sh
 
 # Fetch notification server capabilities.
 s="$(gdbus call --session \
@@ -252,7 +230,7 @@ s="$(gdbus call --session \
 		--method org.freedesktop.Notifications.GetCapabilities)";
 
 # Filter unnecessary characters.
-s="$(filter_chars "[]()," "$s")";
+s="$(filter_chars '[](),' "$s")";
 process_capabilities "$s";
 
 while test "$#" -gt 0; do
@@ -338,20 +316,23 @@ done;
 # send the dbus message, collect the notification ID
 OLD_ID="$ID";
 NEW_ID=0;
-s="$(gdbus call --session \
+if ! s="$(gdbus call --session \
 	--dest org.freedesktop.Notifications \
 	--object-path /org/freedesktop/Notifications \
 	--method org.freedesktop.Notifications.Notify \
 	"$APP_NAME" "uint32 $ID" "$ICON" "$SUMMARY" "$BODY" \
 	"[${AKEYS#,}]" "{\"urgency\":<byte $URGENCY>$HINTS}" \
 	"int32 ${EXPIRE_TIME}")";
+then
+	abrt "\`gdbus\` failed with:: $s";
+fi;
 
 # process the ID
 s="${s%,*}"; NEW_ID="${s#* }";
 
 
 if ! ( test "$(typeof "$NEW_ID")" = "uint" && test "$NEW_ID" -gt 1 ); then
-	abrt "invalid notification ID from gdbus.";
+	abrt "invalid notification ID from \`gdbus\`.";
 fi;
 
 test "$OLD_ID" -gt 1 || ID=${NEW_ID};
@@ -370,10 +351,10 @@ if test -n "$ACMDS"; then
 	# Also, use deterministic execution for the rare instance where
 	# the filesystem doesn't support linux executable permissions bit,
 	# or it's been left unset by a package manager.
-	eval "/bin/sh $PROCDIR/notify-action.sh $ID $ACMDS &";
+	eval "/bin/sh $PROCDIR/notify-action.sh $ID $ACMDS >&- <&- &";
 fi;
 
 # bg task to wait expire time and then actively close notification
 if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -gt 0; then
-	setsid -f /bin/sh "$SELF" -t "$EXPIRE_TIME" -s "$ID" & # >&- 2>&- <&-
+	/bin/sh "$SELF" -f -t "$EXPIRE_TIME" -s "$ID" >&- <&- & #  2>&-
 fi;
