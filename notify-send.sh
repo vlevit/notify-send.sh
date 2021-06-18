@@ -359,5 +359,5 @@ if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -ge 0; then
 	# it's hardly worth waiting the time to execute this since
 	# based on external factors, you probably won't see it anyway.
 	test "$EXPIRE_TIME" -lt "33" || sleep "$((EXPIRE_TIME / 1000))";
-	notify_close
+	notify_close "$ID";
 fi;
