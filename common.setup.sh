@@ -32,18 +32,22 @@ VERSION="2.0.0-rc.m3tior"; # Should be included in all scripts.
 # NOTE: This should execute prior to all other code besides global variables
 #       and function definitions.
 
-for f in "/proc/$$/fd/1" "/proc/$$/fd/2"; do
-	if test -e "$f"; then
-		TERMINAL="$(readlink -n -f "$f")";
-		break;
-	fi;
-done;
+# Record previous FDs for processing later.
+FD1="$(readlink -n -f /proc/$$/fd/1)";
+FD2="$(readlink -n -f /proc/$$/fd/2)";
 
-# This will redirect all output to our logfile,
-exec 1>&2 2>"$LOGFILE";
-# And this will pick up the log, redirecting it to the terminal.
-test -z "$TERMINAL" -a "$TERMINAL" != "/dev/null" ||
-	tail --pid="$$" -f "$LOGFILE" > "$TERMINAL" &
+# Redirect to logfiles.
+exec 1>$LOGFILE.1;
+exec 2>$LOGFILE.2;
+
+# And this will pick up the log, redirecting it to the terminal if we have one.
+test -n "$FD1" -a "$FD1" != "\dev\null" || tail --pid="$$" -f $LOGFILE.1 >> "$FD1" &
+test -n "$FD2" -a "$FD2" != "\dev\null" || tail --pid="$$" -f $LOGFILE.2 >> "$FD2" &
+
+
+# Micro-optimization. Maybe, that's more of a parent script calling this one
+# kind of deal.
+# hash gdbus;
 
 ${DEBUG:=false} && {
 	PS4="\$APPNAME PID#\$\$[\$LINENO]: ";
