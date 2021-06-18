@@ -26,7 +26,7 @@
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
 SELF=$(readlink -n -f $0);
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
-APP_NAME="$(basename "$SELF")";
+APPNAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
 EXPIRE_TIME=-1;
 ID=0;
@@ -34,6 +34,7 @@ URGENCY=1;
 PRINT_ID=false;
 EXPLICIT_CLOSE=false;
 #positional=false;
+CALLER_APPNAME=;
 SUMMARY=; BODY=;
 AKEYS=; ACMDS=; ACTION_COUNT=0;
 HINTS=;
@@ -71,6 +72,7 @@ help () {
 	echo '\t-u, --urgency=LEVEL            Specifies the urgency level (low, normal, critical).';
 	echo '\t-t, --expire-time=TIME         Specifies the timeout in milliseconds at which to expire the notification.';
 	echo '\t-f, --force-expire             Forcefully closes the notification when the notification has expired.';
+	echo "\t                               This won't work unless the expire time is greater than zero."
 	echo '\t-a, --app-name=APP_NAME        Specifies the app name for the icon.';
 	echo '\t-i, --icon=ICON[,ICON...]      Specifies an icon filename or stock icon to display.';
 	echo '\t-c, --category=TYPE[,TYPE...]  Specifies the notification category.';
@@ -92,7 +94,6 @@ starts_with(){
 }
 
 notify_close () {
-	test "$2" -lt 1 || sleep "$(expr substr "$2" 0 $((${#2} - 3)))";
 	gdbus call $NOTIFY_ARGS --method org.freedesktop.Notifications.CloseNotification "$1" >&-;
 }
 
@@ -234,7 +235,7 @@ while test "$#" -gt 0; do
 		;;
 		-a|--app-name|--app-name=*)
 			starts_with "$1" '--app-name=' && s="${1#*=}" || { shift; s="$1"; };
-			export APP_NAME="$s";
+			CALLER_APPNAME="$s";
 		;;
 		-i|--icon|--icon=*)
 			starts_with "$1" '--icon=' && s="${1#*=}" || { shift; s="$1"; };
@@ -281,7 +282,8 @@ while test "$#" -gt 0; do
 
 			ID="$s";
 
-			notify_close "$ID" "0";
+			# Shouldn't need to do any extra processing here.
+			notify_close "$ID";
 			exit $?;
 		;;
 		*)
@@ -316,7 +318,7 @@ if ! s="$(gdbus call --session \
 	--dest org.freedesktop.Notifications \
 	--object-path /org/freedesktop/Notifications \
 	--method org.freedesktop.Notifications.Notify \
-	"$APP_NAME" "uint32 $ID" "$ICON" "$SUMMARY" "$BODY" \
+	"$CALLER_APPNAME" "uint32 $ID" "$ICON" "$SUMMARY" "$BODY" \
 	"[${AKEYS#,}]" "{\"urgency\":<byte $URGENCY>$HINTS}" \
 	"int32 ${EXPIRE_TIME}")";
 then
@@ -351,6 +353,11 @@ if test -n "$ACMDS"; then
 fi;
 
 # bg task to wait expire time and then actively close notification
-if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -gt 0; then
-	/bin/sh "$SELF" -t "$EXPIRE_TIME" -s "$ID" >&- <&- & #  2>&-
+if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -ge 0; then
+	# Expire timeout for gdbus call is in milliseconds
+	# If the expire time is less than an NTSC standard frame,
+	# it's hardly worth waiting the time to execute this since
+	# based on external factors, you probably won't see it anyway.
+	test "$EXPIRE_TIME" -lt "33" || sleep "$((EXPIRE_TIME / 1000))";
+	notify_close
 fi;
