@@ -28,6 +28,7 @@ SELF=$(readlink -n -f $0);
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
 APPNAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
+LOGFILE=${LOGFILE:=$TMP/notify-send.$$.log};
 EXPIRE_TIME=-1;
 ID=0;
 URGENCY=1;

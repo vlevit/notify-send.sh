@@ -26,9 +26,11 @@
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
 SELF=$(readlink -n -f $0);
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
-APP_NAME="$(basename "$SELF")";
+APPNAME="$(basename "$SELF")";
 TMP=${XDG_RUNTIME_DIR:-/tmp}; # XDG standard runtime directory.
 GDBUS_PIDF=$TMP/${APP_NAME:=${SELF##*/}}.$$.dat;
+LOGFILE=${LOGFILE:=$TMP/notify-action.$$.log};
+ACTIONED="false";
 ACTIONC=0;
 #CONCLUDED=; Used to bugfix the exit handler.
 #ID=; # Current shell's target ID.
@@ -53,15 +55,13 @@ do_action () {
 	if test -n "$ACTION"; then
 		# Call setsid to execute the action in a new session.
 		setsid $SHELL -c "$($ACTION)" &;
-		if ${EXPLICIT_CLOSE:=false}; then
-			/bin/sh "$PROCDIR/notify-send.sh" -f -s "$ID";
-		fi;
+		ACTIONED="true";
 	fi;
 }
 
 conclude () {
 	# Bugfix: twice recurring handler
-	if ${CONCLUDED:=false}; then return; fi; CONCLUDED=true;
+	if ${CONCLUDED:=false}; then return; fi; CONCLUDED="true";
 
 	# Only handle the datafile when it exists.
 	test -s "$GDBUS_PIDF" || return;
@@ -74,6 +74,9 @@ conclude () {
 
 	# Always attempt to clean up the PID file.
 	rm -vf "$GDBUS_PIDF";
+
+	# Only cleanup pipes if we haven't launched an action or we're debugging
+	! $ACTIONED || ! $DEBUG  || cleanup_pipes;
 }
 
 ################################################################################
@@ -121,7 +124,7 @@ test -n "$DISPLAY" || abrt "DISPLAY is unset; No Xorg available.";
 
 # kill obsolete monitors (now)
 printf '%s %s ' "$DISPLAY" "$ID" > "$GDBUS_PIDF";
-for f in ${TMP}/${APP_NAME}.*.dat; do
+for f in ${TMP}/${APPNAME}.*.dat; do
 	# Since our PID file suffix is unique, we can guarantee the above will work
 	# for all existing PID files.
 	test -s "$f" || continue;
