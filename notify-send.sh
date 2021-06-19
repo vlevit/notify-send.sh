@@ -53,6 +53,11 @@ SERVER_HAS_ICON_STATIC="false";
 SERVER_HAS_PERSISTENCE="false";
 SERVER_HAS_SOUND="false";
 
+SERVER_NAME=;
+SERVER_VENDOR=;
+SERVER_VERSION=;
+SERVER_SPEC_VERSION=;
+
 ################################################################################
 ## Functions
 
@@ -127,25 +132,8 @@ help () {
 	echo '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
 	echo '\t-s, --close=ID                 Close notification.';
 	echo '\t    --list-capabilities        Shows a list of all optional notification features supported by the server.'
+	echo '\t    --server-info              Prints information about your notification server.';
 	echo '';
-}
-
-starts_with(){
-	local STR="$1" QUERY="$2";
-	test "${STR#$QUERY}" != "$STR"; # implicit exit code return.
-}
-
-notify_close () {
-	gdbus call $NOTIFY_ARGS --method org.freedesktop.Notifications.CloseNotification "$1" >&-;
-}
-
-process_urgency () {
-	case "$1" in
-		0|low) URGENCY=0 ;;
-		1|normal) URGENCY=1 ;;
-		2|critical) URGENCY=2 ;;
-		*) abrt "urgency values are ( 0 => low; 1 => normal; 2 => critical )" ;;
-	esac;
 }
 
 list_capabilities() {
@@ -172,12 +160,70 @@ list_capabilities() {
 	fi;
 }
 
+list_server_info() {
+	local c=;
+	eval "set $*"; # expand variables from pre-tic-quoted list.
+	echo "Name:           '$1'";
+	echo "Vendor:         '$2'";
+	echo "Server Version: '$3'";
+	echo "Spec. Version:  '$4'";
+	echo;
+}
+
+notify_close () {
+	gdbus call $NOTIFY_ARGS --method org.freedesktop.Notifications.CloseNotification "$1" >&-;
+}
+
+process_action () {
+	local l=0 todo="$@" field= s= c=;
+
+	# Split argument into it's fields.
+	while test -n "$todo"; do
+		field="${todo%%:*}";
+		case "$l" in
+			0) s="$field";;
+			1) c="$field";;
+		esac;
+		l=$((l+1));
+		test "$todo" = "${todo#*:}" && break || todo="${todo#*:}";
+	done;
+	test "$l" -eq 2 || abrt "action syntax is \"NAME:COMMAND\"";
+
+	test -n "$s" || abrt "action name cannot be empty.";
+
+	# The user isn't intended to be able to interact with our notifications
+	# outside this application, so keep the API simple and use numbers
+	# for each custom action.
+	ACTION_COUNT="$((ACTION_COUNT + 1))";
+	AKEYS="$AKEYS,\"$ACTION_COUNT\",\"$s\"";
+	ACMDS="$ACMDS \"$ACTION_COUNT\" \"$(sanitize_quote_escapes "$c")\"";
+}
+
 process_category () {
 	local todo="$@" c=;
 	while test -n "$todo"; do
 		c="${todo%%,*}";
 		process_hint "string:category:$c";
 		test "$todo" = "${todo#*,}" && break || todo="${todo#*,}";
+	done;
+}
+
+process_capabilities() {
+	local c=;
+	eval "set $*"; # expand variables from pre-tic-quoted list.\
+	for c in $*; do
+		case "$c" in
+			action-icons)       SERVER_HAS_ACTION_ICONS="true";;
+			actions)            SERVER_HAS_ACTIONS="true";;
+			body)               SERVER_HAS_BODY="true";;
+			body-hyperlinks)    SERVER_HAS_BODY_HYPERLINKS="true";;
+			body-images)        SERVER_HAS_BODY_IMAGES="true";;
+			body-markup)        SERVER_HAS_BODY_MARKUP="true";;
+			icon-multi)         SERVER_HAS_ICON_MULTI="true";;
+			icon-static)        SERVER_HAS_ICON_STATIC="true";;
+			persistence)        SERVER_HAS_PERSISTENCE="true";;
+			sound)              SERVER_HAS_SOUND="true";;
+		esac;
 	done;
 }
 
@@ -222,50 +268,6 @@ https://www.alteeve.com/w/List_of_DBus_data_types";;
 	HINTS="$HINTS,\"$n\":<$t $v>";
 }
 
-process_capabilities() {
-	local c=;
-	eval "set $*"; # expand variables from pre-tic-quoted list.\
-	for c in $*; do
-		case "$c" in
-			action-icons)       SERVER_HAS_ACTION_ICONS="true";;
-			actions)            SERVER_HAS_ACTIONS="true";;
-			body)               SERVER_HAS_BODY="true";;
-			body-hyperlinks)    SERVER_HAS_BODY_HYPERLINKS="true";;
-			body-images)        SERVER_HAS_BODY_IMAGES="true";;
-			body-markup)        SERVER_HAS_BODY_MARKUP="true";;
-			icon-multi)         SERVER_HAS_ICON_MULTI="true";;
-			icon-static)        SERVER_HAS_ICON_STATIC="true";;
-			persistence)        SERVER_HAS_PERSISTENCE="true";;
-			sound)              SERVER_HAS_SOUND="true";;
-		esac;
-	done;
-}
-
-process_action () {
-	local l=0 todo="$@" field= s= c=;
-
-	# Split argument into it's fields.
-	while test -n "$todo"; do
-		field="${todo%%:*}";
-		case "$l" in
-			0) s="$field";;
-			1) c="$field";;
-		esac;
-		l=$((l+1));
-		test "$todo" = "${todo#*:}" && break || todo="${todo#*:}";
-	done;
-	test "$l" -eq 2 || abrt "action syntax is \"NAME:COMMAND\"";
-
-	test -n "$s" || abrt "action name cannot be empty.";
-
-	# The user isn't intended to be able to interact with our notifications
-	# outside this application, so keep the API simple and use numbers
-	# for each custom action.
-	ACTION_COUNT="$((ACTION_COUNT + 1))";
-	AKEYS="$AKEYS,\"$ACTION_COUNT\",\"$s\"";
-	ACMDS="$ACMDS \"$ACTION_COUNT\" \"$(sanitize_quote_escapes "$c")\"";
-}
-
 # key=default: key:command and key:label, with empty label
 # key=close:   key:command, no key:label (no button for the on-close event)
 process_special_action () {
@@ -278,10 +280,34 @@ process_special_action () {
 	ACMDS="$ACMDS \"$1\" \"$(sanitize_quote_escapes "$2")\"";
 }
 
+process_urgency () {
+	case "$1" in
+		0|low) URGENCY=0 ;;
+		1|normal) URGENCY=1 ;;
+		2|critical) URGENCY=2 ;;
+		*) abrt "urgency values are ( 0 => low; 1 => normal; 2 => critical )" ;;
+	esac;
+}
+
+
+starts_with(){
+	local STR="$1" QUERY="$2";
+	test "${STR#$QUERY}" != "$STR"; # implicit exit code return.
+}
+
 ################################################################################
 ## Main Script
 
-# NOTE: Extra setup of STDIO done in common.lib.sh
+# NOTE: Extra setup of STDIO done in common.lib.#!/bin/sh
+
+# Fetch notification server info.
+s="$(gdbus call --session \
+		--dest org.freedesktop.Notifications \
+		--object-path /org/freedesktop/Notifications \
+		--method org.freedesktop.Notifications.GetServerInformation)";
+
+s="$(filter_chars '(),' "$s")";
+process_server_info
 
 # Fetch notification server capabilities.
 s="$(gdbus call --session \
