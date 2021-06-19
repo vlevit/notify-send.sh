@@ -105,7 +105,7 @@ if test "$(typeof "$ID")" != "uint"; then
 fi;
 
 while test ${#} -gt 0; do
-	if test "$(typeof -g "$1")" -lt 4; then
+	if test "$(typeof -g "$1")" -gt 3; then
 		 abrt "action key must not contain special characters.";
 	fi;
 
