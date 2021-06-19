@@ -24,11 +24,12 @@
 ## Globals (Comprehensive - common.setup)
 
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
-SELF=$(readlink -n -f $0);
+SELF=$(readlink -n -f "$0");
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
 APPNAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
 LOGFILE=${LOGFILE:=$TMP/notify-send.$$.log};
+SPEC_VERSION="1.2"; # The current spec version we're targeting.
 EXPIRE_TIME=-1;
 ID=0;
 URGENCY=1;
@@ -69,15 +70,16 @@ SERVER_SPEC_VERSION=;
 # @usage - filter_chars FILTER STRING('s)...
 # @param (STRING's) - The string or strings you wish to sanitize.
 # @param FILTER - A string containing all the characters you wish to filter.
-filter_chars(){
-	local ESCAPES="$1" DONE= f=; shift;
+filter_chars()
+(
+	ESCAPES="$1"; DONE=''; f=''; shift;
 
 	OIFS="$IFS";
-	IFS="$ESCAPES"; for f in $*; do DONE="$DONE$f"; done;
+	IFS="$ESCAPES"; for f in $@; do DONE="$DONE$f"; done;
 	IFS="$OIFS";
 
 	printf '%s' "$DONE";
-}
+);
 
 # @describe - Allows you to filter shell patterns from a given string. Note that
 #             using multiple strings will concatenate them into the output.
@@ -90,10 +92,13 @@ filter_chars(){
 # @usage - filter_chars FILTER STRING('s)...
 # @param (STRING's) - The string or strings you wish to sanitize.
 # @param FILTER - A POSIX shell pattern to be removed from the input.
-filter_pattern(){
-	local FILTER="$1" DONE= TODO= f= b=; shift; TODO="$*";
+filter_pattern()
+(
+	FILTER="$1"; DONE=''; f=''; b='';
 
-	while -n "$TODO"; do
+	shift; TODO="$*";
+
+	while test -n "$TODO"; do
 		f="${TODO%%$FILTER*}";
 		b="${TODO#*$FILTER}";
 		if test "$f" = "$TODO"; then
@@ -104,7 +109,7 @@ filter_pattern(){
 	done;
 
 	printf '%s' "$DONE";
-}
+);
 
 help () {
 	echo 'Usage:';
@@ -113,6 +118,7 @@ help () {
 	echo 'Help Options:';
 	echo '\t-h|--help                      Show help options.';
 	echo '\t-v|--version                   Print version number.';
+	echo '\t   --spec-version              Prints the Desktop Notification Spec this script adhears to.';
 	echo '';
 	echo 'Application Options:';
 	echo '\t-u, --urgency=LEVEL            Specifies the urgency level (low, normal, critical).';
@@ -137,45 +143,42 @@ help () {
 }
 
 list_capabilities() {
-	s=0;
 	echo "Features supported by your machine's server include:";
-	echo "\"actions\"         - Status: $($SERVER_HAS_ACTIONS && s=$((s+1)) || printf 'UN')SUPPORTED";
-	echo "\"action-icons\"    - Status: $($SERVER_HAS_ACTION_ICONS && s=$((s+1)) || printf 'UN')SUPPORTED";
-	echo "\"body\"            - Status: $($SERVER_HAS_BODY && s=$((s+1)) || printf 'UN')SUPPORTED";
-	echo "\"body-hyperlinks\" - Status: $($SERVER_HAS_BODY_HYPERLINKS && s=$((s+1)) || printf 'UN')SUPPORTED";
-	echo "\"body-images\"     - Status: $($SERVER_HAS_BODY_IMAGES && s=$((s+1)) || printf 'UN')SUPPORTED";
-	echo "\"body-markup\"     - Status: $($SERVER_HAS_BODY_MARKUP && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo "\"actions\"         - Status: $(if $SERVER_HAS_ACTIONS; then printf 'UN'; fi)SUPPORTED";
+	echo "\"action-icons\"    - Status: $(if $SERVER_HAS_ACTION_ICONS; then printf 'UN'; fi)SUPPORTED";
+	echo "\"body\"            - Status: $(if $SERVER_HAS_BODY; then printf 'UN'; fi)SUPPORTED";
+	echo "\"body-hyperlinks\" - Status: $(if $SERVER_HAS_BODY_HYPERLINKS; then printf 'UN'; fi)SUPPORTED";
+	echo "\"body-images\"     - Status: $(if $SERVER_HAS_BODY_IMAGES; then printf 'UN'; fi)SUPPORTED";
+	echo "\"body-markup\"     - Status: $(if $SERVER_HAS_BODY_MARKUP; then printf 'UN'; fi)SUPPORTED";
 	# NOTE: these are mutually exclusive, so we only need to check one.
 	echo "\"icon-frames\"     - Status: $(
-		$SERVER_HAS_ICON_MULTI && s=$((s+2)) && printf 'MULTI' ||
-		$SERVER_HAS_ICON_STATIC && s=$((s+1)) && printf 'STATIC' ||
-		printf 'UNSUPPORTED'
+		if $SERVER_HAS_ICON_MULTI; then printf 'MULTI';
+		elif $SERVER_HAS_ICON_STATIC; then printf 'STATIC';
+		else printf 'UNSUPPORTED'; fi;
 	)";
-	echo "\"persistence\"     - Status: $($SERVER_HAS_PERSISTENCE && s=$((s+1)) || printf 'UN')SUPPORTED";
-	echo "\"sound\"           - Status: $($SERVER_HAS_SOUND && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo "\"persistence\"     - Status: $(if $SERVER_HAS_PERSISTENCE; then printf 'UN'; fi)SUPPORTED";
+	echo "\"sound\"           - Status: $(if $SERVER_HAS_SOUND; then printf 'UN'; fi)SUPPORTED";
 	echo;
-	if test "$s" -ge 9; then
-		echo "Your server is 100% fully operational captain. Shall I make the jump to lightspeed?";
-		echo;
-	fi;
 }
 
 list_server_info() {
-	local c=;
-	eval "set $*"; # expand variables from pre-tic-quoted list.
-	echo "Name:           '$1'";
-	echo "Vendor:         '$2'";
-	echo "Server Version: '$3'";
-	echo "Spec. Version:  '$4'";
+	echo "Name:           '$SERVER_NAME'";
+	echo "Vendor:         '$SERVER_VENDOR'";
+	echo "Server Version: '$SERVER_VERSION'";
+	echo "Spec. Version:  '$SERVER_SPEC_VERSION'";
 	echo;
 }
 
 notify_close () {
-	gdbus call $NOTIFY_ARGS --method org.freedesktop.Notifications.CloseNotification "$1" >&-;
+	gdbus call --session \
+		--dest org.freedesktop.Notifications \
+		--object-path /org/freedesktop/Notifications \
+		--method org.freedesktop.Notifications.CloseNotification \
+		"$1" >&2;
 }
 
 process_action () {
-	local l=0 todo="$@" field= s= c=;
+	l=0 todo="$*" field='' s='' c='';
 
 	# Split argument into it's fields.
 	while test -n "$todo"; do
@@ -199,36 +202,37 @@ process_action () {
 	ACMDS="$ACMDS \"$ACTION_COUNT\" \"$(sanitize_quote_escapes "$c")\"";
 }
 
-process_category () {
-	local todo="$@" c=;
+process_category ()
+(
+	todo="$*"; c='';
 	while test -n "$todo"; do
 		c="${todo%%,*}";
 		process_hint "string:category:$c";
 		test "$todo" = "${todo#*,}" && break || todo="${todo#*,}";
 	done;
-}
+)
 
 process_capabilities() {
-	local c=;
+	c='';
 	eval "set $*"; # expand variables from pre-tic-quoted list.\
-	for c in $*; do
+	for c in $@; do
 		case "$c" in
-			action-icons)       SERVER_HAS_ACTION_ICONS="true";;
-			actions)            SERVER_HAS_ACTIONS="true";;
-			body)               SERVER_HAS_BODY="true";;
-			body-hyperlinks)    SERVER_HAS_BODY_HYPERLINKS="true";;
-			body-images)        SERVER_HAS_BODY_IMAGES="true";;
-			body-markup)        SERVER_HAS_BODY_MARKUP="true";;
-			icon-multi)         SERVER_HAS_ICON_MULTI="true";;
-			icon-static)        SERVER_HAS_ICON_STATIC="true";;
-			persistence)        SERVER_HAS_PERSISTENCE="true";;
-			sound)              SERVER_HAS_SOUND="true";;
+			action-icons)    SERVER_HAS_ACTION_ICONS="true";;
+			actions)         SERVER_HAS_ACTIONS="true";;
+			body)            SERVER_HAS_BODY="true";;
+			body-hyperlinks) SERVER_HAS_BODY_HYPERLINKS="true";;
+			body-images)     SERVER_HAS_BODY_IMAGES="true";;
+			body-markup)     SERVER_HAS_BODY_MARKUP="true";;
+			icon-multi)      SERVER_HAS_ICON_MULTI="true";;
+			icon-static)     SERVER_HAS_ICON_STATIC="true";;
+			persistence)     SERVER_HAS_PERSISTENCE="true";;
+			sound)           SERVER_HAS_SOUND="true";;
 		esac;
 	done;
 }
 
-process_hint () {
-	local l=0 todo="$@" field= t= n= v=;
+process_hint() {
+	l=0; todo="$*"; field=''; t=''; n=''; v='';
 
 	# Split argument into it's fields.
 	while test -n "$todo"; do
@@ -266,11 +270,20 @@ https://www.alteeve.com/w/List_of_DBus_data_types";;
 	fi;
 
 	HINTS="$HINTS,\"$n\":<$t $v>";
+};
+
+process_server_info() {
+	c='';
+	eval "set $*"; # expand variables from pre-tic-quoted list.
+	SERVER_NAME="$1";
+	SERVER_VENDOR="$2";
+	SERVER_VERSION="$3";
+	SERVER_SPEC_VERSION="$4";
 }
 
 # key=default: key:command and key:label, with empty label
 # key=close:   key:command, no key:label (no button for the on-close event)
-process_special_action () {
+process_special_action() {
 	test -n "$2" || abrt "Command must not be empty";
 	if test "$1" = 'default'; then
 		# That documentation is really hard to read, yes this is correct.
@@ -280,7 +293,7 @@ process_special_action () {
 	ACMDS="$ACMDS \"$1\" \"$(sanitize_quote_escapes "$2")\"";
 }
 
-process_urgency () {
+process_urgency() {
 	case "$1" in
 		0|low) URGENCY=0 ;;
 		1|normal) URGENCY=1 ;;
@@ -289,11 +302,11 @@ process_urgency () {
 	esac;
 }
 
-
-starts_with(){
-	local STR="$1" QUERY="$2";
+starts_with()
+(
+	STR="$1" QUERY="$2";
 	test "${STR#$QUERY}" != "$STR"; # implicit exit code return.
-}
+)
 
 ################################################################################
 ## Main Script
@@ -307,7 +320,16 @@ s="$(gdbus call --session \
 		--method org.freedesktop.Notifications.GetServerInformation)";
 
 s="$(filter_chars '(),' "$s")";
-process_server_info
+process_server_info "$s";
+
+# Alert the user if this script is opperating on a newer or older spec version
+# than the server.
+if test "$SPEC_VERSION" != "$SERVER_SPEC_VERSION"; then
+	echo "Warning: This script complies with a different standard than the" >&2;
+	echo "         server on your machine, some basic features may be unavailable" >&2;
+	echo "         or this script may fail outright. For more information see" >&2;
+	echo "         \t'notify-send.sh --server-info'" >&2;
+fi;
 
 # Fetch notification server capabilities.
 s="$(gdbus call --session \
@@ -322,11 +344,13 @@ process_capabilities "$s";
 while test "$#" -gt 0; do
 	case "$1" in
 		#--) positional=true;;
-		-h|--help) help; exit 0;;
-		-v|--version) echo "v$VERSION"; exit 0;;
+		-h|--help) help; exit;;
+		-v|--version) echo "v$VERSION"; exit;;
+		#--spec-version) echo "v$SPEC_VERSION"; exit; ;;
 		-f|--force-expire) export EXPLICIT_CLOSE=true;;
 		-p|--print-id) PRINT_ID=true;;
 		--list-capabilities) list_capabilities; exit;;
+		--server-info) list_server_info; exit;;
 		-u|--urgency|--urgency=*)
 			starts_with "$1" '--urgency=' && s="${1#*=}" || { shift; s="$1"; };
 			process_urgency "$s";

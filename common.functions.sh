@@ -35,8 +35,9 @@ abrt () { echo "Error in '$SELF': $*" >&2; exit 1; }
 # @prints (2|'double') - When the input can be coerced into a floating number.
 # @prints (1|'int') - When the input can be coerced into a regular integer.
 # @prints (0|'uint') - When the input can be coereced into an unsigned integer.
-typeof() {
-	local SIGNED=false FLOATING=false GROUP=false in='' f='' b='';
+typeof()
+(
+	SIGNED=false; FLOATING=false; GROUP=false; f=''; b=''; # in='';
 
 	# Check for group return parameter.
 	if test "$1" = "-g"; then GROUP=true; shift; fi;
@@ -72,13 +73,14 @@ typeof() {
 			$GROUP && echo "0" || echo "uint";
 		;;
 	esac;
-}
+)
 
 # @describe - Ensures any character can be used as raw input to a shell pattern.
 # @usage sanitize_quote_escapes STRING('s)...
 # @param STRING('s) - The string or strings you wish to sanitize.
-sanitize_pattern_escapes(){
-	local TODO= DONE= f= b= c=;
+sanitize_pattern_escapes()
+(
+	DONE=''; f=''; b=''; c=''; # TODO='';
 
 	TODO="$*";
 
@@ -98,15 +100,16 @@ sanitize_pattern_escapes(){
 	IFS="$OIFS";
 
 	printf '%s' "$DONE";
-}
+)
 
 # @describe - Ensures any characters that are embeded inside quotes can
 #             be `eval`ed without worry of XSS / Parameter Injection.
 # @usage [-p COUNT] sanitize_quote_escapes STRING('s)...
 # @param STRING('s) - The string or strings you wish to sanitize.
 # @param COUNT - The number of passes to run sanitization, default is 1.
-sanitize_quote_escapes(){
-	local TODO= DONE= PASSES=1 l=0 f= c=;
+sanitize_quote_escapes()
+(
+	DONE=''; PASSES=1; l=0; f=''; c=''; # TODO='';
 
 	if test "$1" = '-p'; then PASSES="$2"; shift 2; fi;
 
@@ -132,4 +135,4 @@ sanitize_quote_escapes(){
 	IFS="$OIFS";
 
 	printf '%s' "$DONE";
-}
+)

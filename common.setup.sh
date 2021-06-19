@@ -49,16 +49,17 @@ FD1="$(readlink -n -f /proc/$$/fd/1)";
 FD2="$(readlink -n -f /proc/$$/fd/2)";
 
 # Redirect to logfiles.
-exec 1>$LOGFILE.1;
-exec 2>$LOGFILE.2;
+exec 1>>$LOGFILE.1;
+exec 2>>$LOGFILE.2;
 
 # And this will pick up the log, redirecting it to the terminal if we have one.
 test -z "$FD1" -o "$FD1" = "\dev\null" || tail --pid="$$" -f $LOGFILE.1 >> "$FD1" &
 test -z "$FD2" -o "$FD2" = "\dev\null" || tail --pid="$$" -f $LOGFILE.2 >> "$FD2" &
 
 # If we're calling exit explicitly, assume it's an early exit, and we haven't
-# launched any external processes that inherit the logfiles.
-alias exit="{ $DEBUG || cleanup_pipes } && exit";
+# launched any external processes that inherit the logfiles. Also only clean
+# if we're not debugging.
+alias exit="if ! $DEBUG; then cleanup_pipes; fi; exit";
 
 
 # Micro-optimization. Maybe, that's more of a parent script calling this one

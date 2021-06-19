@@ -24,7 +24,7 @@
 ## Globals (Comprehensive - common.setup)
 
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
-SELF=$(readlink -n -f $0);
+SELF=$(readlink -n -f "$0");
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
 APPNAME="$(basename "$SELF")";
 TMP=${XDG_RUNTIME_DIR:-/tmp}; # XDG standard runtime directory.
@@ -51,7 +51,7 @@ ACTIONC=0;
 ## Functions
 
 do_action () {
-	local ACTION; eval "ACTION=\"\$ACTION_$1\"";
+	eval "ACTION=\"\$ACTION_$1\"";
 	if test -n "$ACTION"; then
 		# Call setsid to execute the action in a new session.
 		setsid $SHELL -c "$($ACTION)" &;
