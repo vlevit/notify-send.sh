@@ -33,23 +33,24 @@ ID=0;
 URGENCY=1;
 PRINT_ID=false;
 EXPLICIT_CLOSE=false;
-#positional=false;
 CALLER_APPNAME=;
 SUMMARY=; BODY=;
 AKEYS=; ACMDS=; ACTION_COUNT=0;
 HINTS=;
 
+#s=; # Generic temporary string.
+
 # Capability Flags (these are used later with the ${var:=false} matcher)
-#SERVER_HAS_ACTION_ICONS="false";
-#SERVER_HAS_ACTIONS="false";
-#SERVER_HAS_BODY="false";
-#SERVER_HAS_BODY_HYPERLINKS="false";
-#SERVER_HAS_BODY_IMAGES="false";
-#SERVER_HAS_BODY_MARKUP="false";
-#SERVER_HAS_ICON_MULTI="false";
-#SERVER_HAS_ICON_STATIC="false";
-#SERVER_HAS_PERSISTENCE="false";
-#SERVER_HAS_SOUND="false";
+SERVER_HAS_ACTION_ICONS="false";
+SERVER_HAS_ACTIONS="false";
+SERVER_HAS_BODY="false";
+SERVER_HAS_BODY_HYPERLINKS="false";
+SERVER_HAS_BODY_IMAGES="false";
+SERVER_HAS_BODY_MARKUP="false";
+SERVER_HAS_ICON_MULTI="false";
+SERVER_HAS_ICON_STATIC="false";
+SERVER_HAS_PERSISTENCE="false";
+SERVER_HAS_SOUND="false";
 
 ################################################################################
 ## Functions
@@ -124,6 +125,7 @@ help () {
 	echo '\t-r, --replace=ID               Replace existing notification.';
 	echo '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
 	echo '\t-s, --close=ID                 Close notification.';
+	echo '\t    --list-capabilities        Shows a list of all optional notification features supported by the server.'
 	echo '';
 }
 
@@ -143,6 +145,30 @@ process_urgency () {
 		2|critical) URGENCY=2 ;;
 		*) abrt "urgency values are ( 0 => low; 1 => normal; 2 => critical )" ;;
 	esac;
+}
+
+list_capabilities() {
+	s=0;
+	echo "Features supported by your machine's server include:";
+	echo "\"actions\"         - Status: $($SERVER_HAS_ACTIONS && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo "\"action-icons\"    - Status: $($SERVER_HAS_ACTION_ICONS && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo "\"body\"            - Status: $($SERVER_HAS_BODY && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo "\"body-hyperlinks\" - Status: $($SERVER_HAS_BODY_HYPERLINKS && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo "\"body-images\"     - Status: $($SERVER_HAS_BODY_IMAGES && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo "\"body-markup\"     - Status: $($SERVER_HAS_BODY_MARKUP && s=$((s+1)) || printf 'UN')SUPPORTED";
+	# NOTE: these are mutually exclusive, so we only need to check one.
+	echo "\"icon-frames\"     - Status: $(
+		$SERVER_HAS_ICON_MULTI && s=$((s+2)) && printf 'MULTI' ||
+		$SERVER_HAS_ICON_STATIC && s=$((s+1)) && printf 'STATIC' ||
+		printf 'UNSUPPORTED'
+	)";
+	echo "\"persistence\"     - Status: $($SERVER_HAS_PERSISTENCE && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo "\"sound\"           - Status: $($SERVER_HAS_SOUND && s=$((s+1)) || printf 'UN')SUPPORTED";
+	echo;
+	if test "$s" -ge 9; then
+		echo "Your server is 100% fully operational captain. Shall I make the jump to lightspeed?";
+		echo;
+	fi;
 }
 
 process_category () {
@@ -273,6 +299,7 @@ while test "$#" -gt 0; do
 		-v|--version) echo "v$VERSION"; exit 0;;
 		-f|--force-expire) export EXPLICIT_CLOSE=true;;
 		-p|--print-id) PRINT_ID=true;;
+		--list-capabilities) list_capabilities; exit;;
 		-u|--urgency|--urgency=*)
 			starts_with "$1" '--urgency=' && s="${1#*=}" || { shift; s="$1"; };
 			process_urgency "$s";
@@ -353,11 +380,10 @@ while test "$#" -gt 0; do
 			#       Could include some more verbose logging when a user's missing an arg.
 			SUMMARY="$1"; # This can be empty, so a null param is fine.
 
-			if ${SERVER_HAS_BODY:=false}; then
-				echo "Warning: Omitting body text because the notification server doesn't support it." >&2;
+			if $SERVER_HAS_BODY; then
 				BODY="$2";
-				if ${SERVER_HAS_BODY_MARKUP:=false}; then
-					if ${SERVER_HAS_BODY_HYPERLINKS:=false}; then
+				if $SERVER_HAS_BODY_MARKUP; then
+					if $SERVER_HAS_BODY_HYPERLINKS; then
 						echo "Warning: The notification service on your device doesn't support" >&2;
 						echo "         hyperlinks in it's body text. So they will be filtered out." >&2;
 						BODY="$(filter_pattern '<a href="*">' "$BODY")";
@@ -380,6 +406,8 @@ while test "$#" -gt 0; do
 					BODY="$(filter_pattern '<[biua]/>' "$BODY")";
 					BODY="$(filter_pattern '<img */>' "$BODY")";
 				fi;
+			else
+				echo "Warning: Omitting body text because the notification server doesn't support it." >&2;
 			fi;
 
 			# Alert the user we weren't expecting any more arguments.
@@ -433,6 +461,11 @@ if test -n "$ACMDS"; then
 	# the filesystem doesn't support linux executable permissions bit,
 	# or it's been left unset by a package manager.
 	eval "/bin/sh $PROCDIR/notify-action.sh $ID $ACMDS >&- <&- &";
+else
+	# Since we know there won't be any scripts to inherit the log files from,
+	# we can use a conditional trap to cleanup on exit. Ignore cleanup if we're
+	# debugging.
+	$DEBUG || trap "cleanup_pipes" 0;
 fi;
 
 # bg task to wait expire time and then actively close notification
