@@ -62,8 +62,8 @@ SERVER_SPEC_VERSION=;
 ################################################################################
 ## Functions
 
-. $PROCDIR/common.functions.sh; # Import shared code.
-. $PROCDIR/common.setup.sh; # Ensures we have debug and logfile stuff together.
+. "$PROCDIR/common.functions.sh"; # Import shared code.
+. "$PROCDIR/common.setup.sh"; # Ensures we have debug and logfile stuff together.
 
 # @describe - Allows you to filter characters from a given string. Note that
 #             using multiple strings will concatenate them into the output.
@@ -79,7 +79,7 @@ filter_chars()
 	IFS="$OIFS";
 
 	printf '%s' "$DONE";
-);
+)
 
 # @describe - Allows you to filter shell patterns from a given string. Note that
 #             using multiple strings will concatenate them into the output.
@@ -109,7 +109,7 @@ filter_pattern()
 	done;
 
 	printf '%s' "$DONE";
-);
+)
 
 help () {
 	echo 'Usage:';
@@ -178,21 +178,19 @@ notify_close () {
 }
 
 process_action () {
-	l=0 todo="$*" field='' s='' c='';
+	l=0; s=''; c='';
 
-	# Split argument into it's fields.
-	while test -n "$todo"; do
-		field="${todo%%:*}";
+	OIFS="$IFS"; # Split argument into it's fields.
+	IFS=":"; for field in $@; do
 		case "$l" in
 			0) s="$field";;
 			1) c="$field";;
+			*)
 		esac;
 		l=$((l+1));
-		test "$todo" = "${todo#*:}" && break || todo="${todo#*:}";
 	done;
-	test "$l" -eq 2 || abrt "action syntax is \"NAME:COMMAND\"";
-
-	test -n "$s" || abrt "action name cannot be empty.";
+	if test "$l" -ne 2; then abrt "action syntax is \"NAME:COMMAND\""; fi;
+	if test -z "$s"; then abrt "action name cannot be empty."; fi;
 
 	# The user isn't intended to be able to interact with our notifications
 	# outside this application, so keep the API simple and use numbers
@@ -202,18 +200,15 @@ process_action () {
 	ACMDS="$ACMDS \"$ACTION_COUNT\" \"$(sanitize_quote_escapes "$c")\"";
 }
 
-process_category ()
-(
-	todo="$*"; c='';
-	while test -n "$todo"; do
-		c="${todo%%,*}";
-		process_hint "string:category:$c";
-		test "$todo" = "${todo#*,}" && break || todo="${todo#*,}";
+process_category () {
+	OIFS="$IFS";
+	IFS=','; for c in $@; do
+		IFS="$OIFS" process_hint "string:category:$c";
 	done;
-)
+	IFS="$OIFS";
+}
 
 process_capabilities() {
-	c='';
 	eval "set $*"; # expand variables from pre-tic-quoted list.\
 	for c in $@; do
 		case "$c" in
@@ -232,20 +227,21 @@ process_capabilities() {
 }
 
 process_hint() {
-	l=0; todo="$*"; field=''; t=''; n=''; v='';
+	l=0; t=''; n=''; v='';
 
 	# Split argument into it's fields.
-	while test -n "$todo"; do
-		field="${todo%%:*}";
+	OIFS="$IFS";
+	IFS=':'; for field in $@; do
 		case "$l" in
 			0) t="$field";;
 			1) n="$field";;
 			2) v="$field";;
 		esac;
 		l=$((l+1));
-		if test "$todo" = "${todo#*:}"; then todo=; else todo="${todo#*:}"; fi;
 	done;
-	test "$l" -eq 3 || abrt "hint syntax is \"TYPE:NAME:VALUE\".";
+
+	if test "$l" -ne 3; then abrt "hint syntax is \"TYPE:NAME:VALUE\"."; fi;
+	if test -z "$n"; then abrt "hint name cannot be empty."; fi;
 
 	# https://www.alteeve.com/w/List_of_DBus_data_types
 	# NOTE: I'm only implementing simple primitives here because I don't think
@@ -258,8 +254,6 @@ process_hint() {
 		*) abrt "hint types must be one of the datatypes listed the site below.
 https://www.alteeve.com/w/List_of_DBus_data_types";;
 	esac;
-
-	test -n "$n" || abrt "hint name cannot be empty.";
 
 	# NOTE: Don't actually worry about extra typechecking for hints, since
 	#       if someone's using this script, they're probably educated enough
@@ -284,7 +278,7 @@ process_server_info() {
 # key=default: key:command and key:label, with empty label
 # key=close:   key:command, no key:label (no button for the on-close event)
 process_special_action() {
-	test -n "$2" || abrt "Command must not be empty";
+	if test -z "$2"; then abrt "Command must not be empty"; fi;
 	if test "$1" = 'default'; then
 		# That documentation is really hard to read, yes this is correct.
 		AKEYS="$AKEYS,\"default\",\"Okay\"";
@@ -352,19 +346,19 @@ while test "$#" -gt 0; do
 		--list-capabilities) list_capabilities; exit;;
 		--server-info) list_server_info; exit;;
 		-u|--urgency|--urgency=*)
-			starts_with "$1" '--urgency=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--urgency='; then s="${1#*=}"; else shift; s="$1"; fi;
 			process_urgency "$s";
 		;;
 		-t|--expire-time|--expire-time=*)
-			starts_with "$1" '--expire-time=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--expire-time='; then s="${1#*=}"; else shift; s="$1"; fi;
 			EXPIRE_TIME="$s";
 		;;
 		-a|--app-name|--app-name=*)
-			starts_with "$1" '--app-name=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--app-name='; then s="${1#*=}"; else shift; s="$1"; fi;
 			CALLER_APPNAME="$s";
 		;;
 		-i|--icon|--icon=*)
-			starts_with "$1" '--icon=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--icon='; then s="${1#*=}"; else shift; s="$1"; fi;
 
 			# NOTE: We don't need to assist the search path at all or modify
 			#       the path into a URI, I misunderstood the spec.
@@ -374,43 +368,54 @@ while test "$#" -gt 0; do
 			ICON="$s";
 		;;
 		-c|--category|--category=*)
-			starts_with "$1" '--category=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--category='; then s="${1#*=}"; else shift; s="$1"; fi;
 			process_category "$s";
 		;;
 		-H|--hint|--hint=*)
-			starts_with "$1" '--hint=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--hint='; then s="${1#*=}"; else shift; s="$1"; fi;
 			process_hint "$s";
 		;;
 		-o|--action|--action=*)
-			starts_with "$1" '--action=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--action='; then s="${1#*=}"; else shift; s="$1"; fi;
 			process_action "$s";
 		;;
 		-d|--default-action|--default-action=*)
-			starts_with "$1" '--default-action=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--default-action='; then s="${1#*=}"; else shift; s="$1"; fi;
 			process_special_action default "$s";
 		;;
 		-l|--close-action|--close-action=*)
-			starts_with "$1" '--close-action=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--close-action='; then s="${1#*=}"; else shift; s="$1"; fi;
 			process_special_action close "$s";
 		;;
 		-r|--replace|--replace=*)
-			starts_with "$1" '--replace=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--replace='; then s="${1#*=}"; else shift; s="$1"; fi;
 
-			test "$(typeof "$s")" = "uint" -a "$s" -gt 0 || \
+			if test "$(typeof "$s")" != "uint" -o "$s" -lt 1; then
 				abrt "ID must be a positive integer greater than 0, but was provided \"$s\".";
+			fi;
 
 			ID="$s";
 		;;
 		-R|--replace-file|--replace-file=*)
-			starts_with "$1" '--replace-file=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--replace-file='; then s="${1#*=}"; else shift; s="$1"; fi;
 
-			ID_FILE="$s"; ! test -s "$ID_FILE" || read ID < "$ID_FILE";
+			ID_FILE="$s";
+			if test -e "$ID_FILE"; then
+				read -r ID < "$ID_FILE";
+			else
+				abrt "file \"$ID_FILE\" couldn't be found.";
+			fi;
+
+			if test "$(typeof "$ID")" != "uint" -o "$ID" -lt 1; then
+				abrt "ID must be a positive integer greater than 0, but was provided \"$s\".";
+			fi;
 		;;
 		-s|--close|--close=*)
-			starts_with "$1" '--close=' && s="${1#*=}" || { shift; s="$1"; };
+			if starts_with "$1" '--close='; then s="${1#*=}"; else shift; s="$1"; fi;
 
-			test "$(typeof "$s")" = "uint" -a "$s" -gt 0 || \
+			if test "$(typeof "$s")" != "uint" -o "$s" -lt 1; then
 				abrt "ID must be a positive integer greater than 0, but was provided \"$s\".";
+			fi;
 
 			ID="$s";
 
@@ -491,7 +496,7 @@ fi;
 s="${s%,*}"; NEW_ID="${s#* }";
 
 
-if ! ( test "$(typeof "$NEW_ID")" = "uint" && test "$NEW_ID" -gt 1 ); then
+if test "$(typeof "$NEW_ID")" != "uint" -o "$NEW_ID" -lt 1; then
 	abrt "invalid notification ID from \`gdbus\`.";
 fi;
 
@@ -516,7 +521,7 @@ else
 	# Since we know there won't be any scripts to inherit the log files from,
 	# we can use a conditional trap to cleanup on exit. Ignore cleanup if we're
 	# debugging.
-	$DEBUG || trap "cleanup_pipes" 0;
+	if ! $DEBUG; then trap "cleanup_pipes" 0; fi;
 fi;
 
 # bg task to wait expire time and then actively close notification
@@ -525,6 +530,6 @@ if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -ge 0; then
 	# If the expire time is less than an NTSC standard frame,
 	# it's hardly worth waiting the time to execute this since
 	# based on external factors, you probably won't see it anyway.
-	test "$EXPIRE_TIME" -lt "33" || sleep "$((EXPIRE_TIME / 1000))";
+	if test "$EXPIRE_TIME" -gt "33"; then sleep "$((EXPIRE_TIME / 1000))"; fi;
 	notify_close "$ID";
 fi;

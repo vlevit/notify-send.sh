@@ -34,8 +34,8 @@ DEBUG="${DEBUG:=false}";
 cleanup_pipes(){
 	# Terminals a special character files. If we are a terminal or empty,
 	# don't clean up.
-	test -z "$FD1" -o -c "$FD1" || rm -f "$FD1";
-	test -z "$FD2" -o -c "$FD2" || rm -f "$FD2";
+	if test -n "$FD1" -a \( ! -c "$FD1" \); then rm -f "$FD1"; fi;
+	if test -n "$FD2" -a \( ! -c "$FD2" \); then rm -f "$FD2"; fi;
 }
 
 ################################################################################
@@ -53,8 +53,12 @@ exec 1>>$LOGFILE.1;
 exec 2>>$LOGFILE.2;
 
 # And this will pick up the log, redirecting it to the terminal if we have one.
-test -z "$FD1" -o "$FD1" = "\dev\null" || tail --pid="$$" -f $LOGFILE.1 >> "$FD1" &
-test -z "$FD2" -o "$FD2" = "\dev\null" || tail --pid="$$" -f $LOGFILE.2 >> "$FD2" &
+if test -n "$FD1" -a "$FD1" != "\dev\null"; then
+	tail --pid="$$" -f $LOGFILE.1 >> "$FD1" &
+fi;
+if test -n "$FD2" -a "$FD2" != "\dev\null"; then
+	tail --pid="$$" -f $LOGFILE.2 >> "$FD2" &
+fi;
 
 # If we're calling exit explicitly, assume it's an early exit, and we haven't
 # launched any external processes that inherit the logfiles. Also only clean

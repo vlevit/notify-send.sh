@@ -51,11 +51,10 @@ ACTIONC=0;
 ## Functions
 
 do_action () {
-	eval "ACTION=\"\$ACTION_$1\"";
+	ACTION=''; eval "ACTION=\"\$ACTION_$1\"";
 	if test -n "$ACTION"; then
 		# Call setsid to execute the action in a new session.
-		setsid $SHELL -c "$($ACTION)" &;
-		ACTIONED="true";
+		setsid "$SHELL" -c "$($ACTION)" & ACTIONED="true";
 	fi;
 }
 
@@ -64,19 +63,19 @@ conclude () {
 	if ${CONCLUDED:=false}; then return; fi; CONCLUDED="true";
 
 	# Only handle the datafile when it exists.
-	test -s "$GDBUS_PIDF" || return;
-	read d i p x < "$GDBUS_PIDF";
+	if test -s "$GDBUS_PIDF"; then
+		read -r d i p x < "$GDBUS_PIDF";
 
-	# Only need to kill `gdbus` if it still exists. Because this process is
-	# shutting down the shell parent. If we don't do this, `gdbus` will be
-	# left alive dangling on an empty FD.
-	test -z "$p" || kill "$p";
+		# Only need to kill `gdbus` if it still exists. Because this process is
+		# shutting down the shell parent. If we don't do this, `gdbus` will be
+		# left alive dangling on an empty FD.
+		test -z "$p" || kill "$p";
 
-	# Always attempt to clean up the PID file.
-	rm -vf "$GDBUS_PIDF";
+		# Always attempt to clean up the PID file.
+		rm -f "$GDBUS_PIDF";
+	fi;
 
-	# Only cleanup pipes if we haven't launched an action or we're debugging
-	! $ACTIONED || ! $DEBUG  || cleanup_pipes;
+	if ! $ACTIONED && ! $DEBUG; then cleanup_pipes; fi;
 }
 
 ################################################################################
@@ -100,8 +99,10 @@ if test "$1" = "--help" -o "$1" = "-h"; then
 fi;
 
 # consume the command line
-test -n "${ID:=$1}" || abrt "No notification id provided."; shift;
-test "$(typeof "$ID")" = "uint" || abrt "ID must be unsigned integer type.";
+if test -z "${ID:=$1}"; then abrt "No notification id provided."; fi; shift;
+if test "$(typeof "$ID")" != "uint"; then
+	abrt "ID must be unsigned integer type.";
+fi;
 
 while test ${#} -gt 0; do
 	if test "$(typeof -g "$1")" -lt 4; then
@@ -111,7 +112,7 @@ while test ${#} -gt 0; do
 	eval "ACTION_$1=\"$(sanitize_quote_escapes "$2")\"";
 
 	# Throw error when key is supplied without action value.
-	test -n "$2" || abrt "Action #$ACTIONC supplied key without value.";
+	if test -z "$2"; then abrt "Action #$ACTIONC supplied key without value."; fi;
 
 	shift 2;
 
@@ -127,14 +128,14 @@ printf '%s %s ' "$DISPLAY" "$ID" > "$GDBUS_PIDF";
 for f in ${TMP}/${APPNAME}.*.dat; do
 	# Since our PID file suffix is unique, we can guarantee the above will work
 	# for all existing PID files.
-	test -s "$f" || continue;
-	test "$f" -ot "$GDBUS_PIDF" || continue;
-	read d i p x < "$f";
+	if ! test -s "$f"; then continue; fi;
+	if ! test "$f" -ot "$GDBUS_PIDF"; then continue; fi;
+	read -r d i p x < "$f";
 
 	# Ensure target processes have the same display.
-	test "$d" = "$DISPLAY" || continue;
+	if test "$d" != "$DISPLAY"; then continue; fi;
 	# Ensure target processes have the same notification ID.
-	test "$i" -eq "$ID" || continue;
+	if test "$i" -ne "$ID"; then continue; fi;
 
 	# Fetch group PID from filename.
 	p=${f%.dat}; p=${p##*.};
@@ -155,14 +156,14 @@ trap "conclude" EXIT HUP INT QUIT ABRT TERM;
 
 	echo "$!" >> $GDBUS_PIDF;
 } | \
-while IFS=" :.(),'" read x x x x e x i x k x; do
+while IFS=" :.(),'" read -r x x x x e x i x k x; do
 	# XXX: The above read isn't as robust as a regex search and may cause
 	#      this script to break if gdbus's logging format ever changes.
 	#      But it's lightning fast and portable, so the trade is worth it.
 
 	# The first two lines always contain garbage data, so supress the illegal
 	# number warnings from test by blocking stderr.
-	test "$i" -eq "$ID" 2>/dev/null || continue;
+	if test "$i" -ne "$ID" 2>/dev/null; then continue; fi;
 	case "$e" in
 		# Only
 		"NotificationClosed") do_action "close"; break ;;

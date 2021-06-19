@@ -45,13 +45,13 @@ typeof()
 	in="$*";
 
 	# Check for negation sign.
-	test "$in" = "${b:=${in#-}}" || SIGNED=true;
+	if test "$in" != "${b:=${in#-}}"; then SIGNED=true; fi;
 	in="$b"; b='';
 
 	# Check for floating point.
 	if test "$in" != "${b:=${in#*.}}" -a "$in" != "${f:=${in%.*}}"; then
 		if test "$in" != "$f.$b"; then
-			$GROUP && echo "5" || echo "string"; return;
+			if $GROUP; then echo "5"; else echo "string"; fi; return;
 		fi;
 		FLOATING=true;
 	fi;
@@ -59,18 +59,22 @@ typeof()
 	case "$in" in
 		''|*[!0-9\.]*)
 			if test "$in" != "${in#*[~\`\!@\#\$%\^\*()\+=\{\}\[\]|:;\"\'<>,?\/]}"; then
-				$GROUP && echo "5" || echo "string";
+				if $GROUP; then echo "5"; else echo "string"; fi;
 			else
 				if test "$in" != "${1#*[_\-.\\ ]}"; then
-					$GROUP && echo "4" || echo "filename";
+					if $GROUP; then echo "4"; else echo "filename"; fi;
 				else
-					$GROUP && echo "3" || echo "alphanum";
+					if $GROUP; then echo "3"; else echo "alphanum"; fi;
 				fi;
 			fi;;
 		*)
-			if $FLOATING; then $GROUP && echo "2" || echo "double"; return; fi;
-			if $SIGNED; then $GROUP && echo "1" || echo "int"; return; fi;
-			$GROUP && echo "0" || echo "uint";
+			if $FLOATING; then
+				if $GROUP; then echo "2"; else echo "double"; fi; return;
+			fi;
+			if $SIGNED; then
+				if $GROUP; then echo "1"; else echo "int"; fi; return;
+			fi;
+			if $GROUP; then echo "0"; else echo "uint"; fi;
 		;;
 	esac;
 )
@@ -88,13 +92,13 @@ sanitize_pattern_escapes()
 	IFS='"\$[]*'; for f in $TODO; do
 		# Since $f cannot contain unsafe chars, we can test against it.
 		c=;
-		test "${TODO#${DONE}${f}\\}" = "$TODO" || c='\\';
-		test "${TODO#${DONE}${f}\$}" = "$TODO" || c='\$';
-		test "${TODO#${DONE}${f}\*}" = "$TODO" || c='\*';
+		if test "${TODO#${DONE}${f}\\}" != "$TODO"; then c='\\'; fi;
+		if test "${TODO#${DONE}${f}\$}" != "$TODO"; then c='\$'; fi;
+		if test "${TODO#${DONE}${f}\*}" != "$TODO"; then c='\*'; fi;
 		# test "${TODO#${DONE}${f}\)}" = "$TODO" || c='\)';
 		# test "${TODO#${DONE}${f}\(}" = "$TODO" || c='\(';
-		test "${TODO#${DONE}${f}\[}" = "$TODO" || c='\[';
-		test "${TODO#${DONE}${f}\]}" = "$TODO" || c='\]';
+		if test "${TODO#${DONE}${f}\[}" != "$TODO"; then c='\['; fi;
+		if test "${TODO#${DONE}${f}\]}" != "$TODO"; then c='\]'; fi;
 		DONE="$DONE$f$c";
 	done;
 	IFS="$OIFS";
@@ -124,10 +128,10 @@ sanitize_quote_escapes()
 		IFS='"\$'; for f in $TODO; do
 			# Since $f cannot contain unsafe chars, we can test against it.
 			c=;
-			test "${TODO#${DONE}${f}\"}" = "$TODO" || c='\"';
-			test "${TODO#${DONE}${f}\\}" = "$TODO" || c='\\';
-			test "${TODO#${DONE}${f}\$}" = "$TODO" || c='\$';
-			test "${TODO#${DONE}${f}\`}" = "$TODO" || c='\`';
+			if test "${TODO#${DONE}${f}\"}" != "$TODO"; then c='\"'; fi;
+			if test "${TODO#${DONE}${f}\\}" != "$TODO"; then c='\\'; fi;
+			if test "${TODO#${DONE}${f}\$}" != "$TODO"; then c='\$'; fi;
+			if test "${TODO#${DONE}${f}\`}" != "$TODO"; then c='\`'; fi;
 			DONE="$DONE$f$c";
 		done;
 		l="$((l + 1))"; # Increment loop counter.
