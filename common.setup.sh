@@ -22,9 +22,21 @@
 ################################################################################
 ## Globals
 
+# SELF=; # The path to the currently executing script.
 LOGFILE=${LOGFILE:=$TMP/notify-send.$$.log};
 TERMINAL=; # Holds the file for printing to our terminal, if we have one.
 VERSION="2.0.0-rc.m3tior"; # Should be included in all scripts.
+DEBUG="${DEBUG:=false}";
+
+################################################################################
+## Functions
+
+cleanup_pipes(){
+	# Terminals a special character files. If we are a terminal or empty,
+	# don't clean up.
+	test -z "$FD1" -o -c "$FD1" || rm -f "$FD1";
+	test -z "$FD2" -o -c "$FD2" || rm -f "$FD2";
+}
 
 ################################################################################
 ## Main Script
@@ -41,16 +53,20 @@ exec 1>$LOGFILE.1;
 exec 2>$LOGFILE.2;
 
 # And this will pick up the log, redirecting it to the terminal if we have one.
-test -n "$FD1" -a "$FD1" != "\dev\null" || tail --pid="$$" -f $LOGFILE.1 >> "$FD1" &
-test -n "$FD2" -a "$FD2" != "\dev\null" || tail --pid="$$" -f $LOGFILE.2 >> "$FD2" &
+test -z "$FD1" -o "$FD1" = "\dev\null" || tail --pid="$$" -f $LOGFILE.1 >> "$FD1" &
+test -z "$FD2" -o "$FD2" = "\dev\null" || tail --pid="$$" -f $LOGFILE.2 >> "$FD2" &
+
+# If we're calling exit explicitly, assume it's an early exit, and we haven't
+# launched any external processes that inherit the logfiles.
+alias exit="{ $DEBUG || cleanup_pipes } && exit";
 
 
 # Micro-optimization. Maybe, that's more of a parent script calling this one
 # kind of deal.
 # hash gdbus;
 
-${DEBUG:=false} && {
-	PS4="\$APPNAME PID#\$\$[\$LINENO]: ";
+if $DEBUG; then
+	PS4="\$SELF in PID#\$\$ @\$LINENO: ";
 	set -x;
 	trap "set >&2" 0;
-}
+fi;
