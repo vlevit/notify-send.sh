@@ -35,6 +35,8 @@ ID=0;
 URGENCY=1;
 PRINT_ID=false;
 EXPLICIT_CLOSE=false;
+NOTIFY_CMD_SUCCESS=false;
+NOTIFY_CMD_FAILURE=true;
 CALLER_APPNAME=;
 SUMMARY=; BODY=;
 AKEYS=; ACMDS=; ACTION_COUNT=0;
@@ -67,9 +69,9 @@ SERVER_SPEC_VERSION=;
 
 # @describe - Allows you to filter characters from a given string. Note that
 #             using multiple strings will concatenate them into the output.
-# @example - filter_chars FILTER STRING('s)...
-# @arg $1 (STRING's) - The string or strings you wish to sanitize.
-# @arg $* FILTER - A string containing all the characters you wish to filter.
+# @usage - filter_chars FILTER STRING('s)...
+# @param (STRING's) - The string or strings you wish to sanitize.
+# @param FILTER - A string containing all the characters you wish to filter.
 # @exitcode 0
 filter_chars()
 (
@@ -91,8 +93,8 @@ filter_chars()
 #             through two cycles of escape sanitization.
 #
 # @usage - filter_chars FILTER STRING('s)...
-# @arg (STRING's) - The string or strings you wish to sanitize.
-# @arg FILTER - A POSIX shell pattern to be removed from the input.
+# @param (STRING's) - The string or strings you wish to sanitize.
+# @param FILTER - A POSIX shell pattern to be removed from the input.
 filter_pattern()
 (
 	FILTER="$1"; DONE=''; f=''; b='';
@@ -140,6 +142,8 @@ help () {
 	echo '\t-s, --close=ID                 Close notification.';
 	echo '\t    --list-capabilities        Shows a list of all optional notification features supported by the server.'
 	echo '\t    --server-info              Prints information about your notification server.';
+	echo '\t    --notify-success           When executing actions, will display a notification on success.';
+	echo "\t-q, --quietly-fail             When an action fails, don't display the error notification.";
 	echo '';
 }
 
@@ -347,9 +351,11 @@ while test "$#" -gt 0; do
 		#--) positional=true;;
 		-h|--help) help; exit;;
 		-v|--version) echo "v$VERSION"; exit;;
-		#--spec-version) echo "v$SPEC_VERSION"; exit; ;;
+		--spec-version) echo "v$SPEC_VERSION"; exit;;
 		-f|--force-expire) export EXPLICIT_CLOSE=true;;
 		-p|--print-id) PRINT_ID=true;;
+		--notify-success) export NOTIFY_CMD_SUCCESS="true";;
+		-q|--quietly-fail) export NOTIFY_CMD_FAILURE="false";;
 		--list-capabilities) list_capabilities; exit;;
 		--server-info) list_server_info; exit;;
 		-u|--urgency|--urgency=*)

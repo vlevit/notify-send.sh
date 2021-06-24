@@ -24,9 +24,9 @@
 
 # SELF=; # The path to the currently executing script.
 LOGFILE=${LOGFILE:=$TMP/notify-send.$$.log};
-TERMINAL=; # Holds the file for printing to our terminal, if we have one.
 VERSION="2.0.0-rc.m3tior"; # Should be included in all scripts.
 DEBUG="${DEBUG:=false}";
+FD1=; FD2=; # Holds our initial file descriptor output locations.
 
 ################################################################################
 ## Functions
