@@ -2,7 +2,7 @@
 # @file - notify-send.sh
 # @brief - drop-in replacement for notify-send with more features
 ###############################################################################
-# Copyright (C) 2015-2020 notify-send.sh authors (see AUTHORS file)
+# Copyright (C) 2015-2021 notify-send.sh authors (see AUTHORS file)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -67,9 +67,10 @@ SERVER_SPEC_VERSION=;
 
 # @describe - Allows you to filter characters from a given string. Note that
 #             using multiple strings will concatenate them into the output.
-# @usage - filter_chars FILTER STRING('s)...
-# @param (STRING's) - The string or strings you wish to sanitize.
-# @param FILTER - A string containing all the characters you wish to filter.
+# @example - filter_chars FILTER STRING('s)...
+# @arg $1 (STRING's) - The string or strings you wish to sanitize.
+# @arg $* FILTER - A string containing all the characters you wish to filter.
+# @exitcode 0
 filter_chars()
 (
 	ESCAPES="$1"; DONE=''; f=''; shift;
@@ -90,8 +91,8 @@ filter_chars()
 #             through two cycles of escape sanitization.
 #
 # @usage - filter_chars FILTER STRING('s)...
-# @param (STRING's) - The string or strings you wish to sanitize.
-# @param FILTER - A POSIX shell pattern to be removed from the input.
+# @arg (STRING's) - The string or strings you wish to sanitize.
+# @arg FILTER - A POSIX shell pattern to be removed from the input.
 filter_pattern()
 (
 	FILTER="$1"; DONE=''; f=''; b='';
@@ -143,21 +144,31 @@ help () {
 }
 
 list_capabilities() {
-	echo "Features supported by your machine's server include:";
-	echo "\"actions\"         - Status: $(if $SERVER_HAS_ACTIONS; then printf 'UN'; fi)SUPPORTED";
-	echo "\"action-icons\"    - Status: $(if $SERVER_HAS_ACTION_ICONS; then printf 'UN'; fi)SUPPORTED";
-	echo "\"body\"            - Status: $(if $SERVER_HAS_BODY; then printf 'UN'; fi)SUPPORTED";
-	echo "\"body-hyperlinks\" - Status: $(if $SERVER_HAS_BODY_HYPERLINKS; then printf 'UN'; fi)SUPPORTED";
-	echo "\"body-images\"     - Status: $(if $SERVER_HAS_BODY_IMAGES; then printf 'UN'; fi)SUPPORTED";
-	echo "\"body-markup\"     - Status: $(if $SERVER_HAS_BODY_MARKUP; then printf 'UN'; fi)SUPPORTED";
+	printf 'Status of server capabilities:\n';
+	printf '%s' "\"actions\"         - Status: ";
+	if ! $SERVER_HAS_ACTIONS; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
+	printf '%s' "\"action-icons\"    - Status: ";
+	if ! $SERVER_HAS_ACTION_ICONS; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
+	printf '%s' "\"body\"            - Status: ";
+	if ! $SERVER_HAS_BODY; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
+	printf '%s' "\"body-hyperlinks\" - Status: ";
+	if ! $SERVER_HAS_BODY_HYPERLINKS; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
+	printf '%s' "\"body-images\"     - Status: ";
+	if ! $SERVER_HAS_BODY_IMAGES; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
+	printf '%s' "\"body-markup\"     - Status: ";
+	if ! $SERVER_HAS_BODY_MARKUP; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
+
 	# NOTE: these are mutually exclusive, so we only need to check one.
-	echo "\"icon-frames\"     - Status: $(
-		if $SERVER_HAS_ICON_MULTI; then printf 'MULTI';
-		elif $SERVER_HAS_ICON_STATIC; then printf 'STATIC';
-		else printf 'UNSUPPORTED'; fi;
-	)";
-	echo "\"persistence\"     - Status: $(if $SERVER_HAS_PERSISTENCE; then printf 'UN'; fi)SUPPORTED";
-	echo "\"sound\"           - Status: $(if $SERVER_HAS_SOUND; then printf 'UN'; fi)SUPPORTED";
+	printf '%s' "\"icon-frames\"     - Status: ";
+	if $SERVER_HAS_ICON_MULTI; then printf 'MULTI\n';
+	elif $SERVER_HAS_ICON_STATIC; then printf 'STATIC\n';
+	else printf 'UNSUPPORTED\n';
+	fi;
+
+	printf '%s' "\"persistence\"     - Status: ";
+	if ! $SERVER_HAS_PERSISTENCE; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
+	printf '%s' "\"sound\"           - Status: ";
+	if ! $SERVER_HAS_SOUND; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
 	echo;
 }
 
@@ -258,10 +269,7 @@ https://www.alteeve.com/w/List_of_DBus_data_types";;
 	# NOTE: Don't actually worry about extra typechecking for hints, since
 	#       if someone's using this script, they're probably educated enough
 	#       to figure out what GDBUS throws as its error.
-	if test "$t" = 'string'; then
-		# Add quote buffer to string values
-		v="\"$(sanitize_quote_escapes "$2")\"";
-	fi;
+	if test "$t" = 'string'; then v="\"$(sanitize_quote_escapes "$v")\""; fi;
 
 	HINTS="$HINTS,\"$n\":<$t $v>";
 };
@@ -331,7 +339,6 @@ s="$(gdbus call --session \
 		--object-path /org/freedesktop/Notifications \
 		--method org.freedesktop.Notifications.GetCapabilities)";
 
-# Filter unnecessary characters.
 s="$(filter_chars '[](),' "$s")";
 process_capabilities "$s";
 
@@ -417,10 +424,7 @@ while test "$#" -gt 0; do
 				abrt "ID must be a positive integer greater than 0, but was provided \"$s\".";
 			fi;
 
-			ID="$s";
-
-			# Shouldn't need to do any extra processing here.
-			notify_close "$ID";
+			notify_close "$s";
 			exit $?;
 		;;
 		*)
@@ -456,7 +460,8 @@ while test "$#" -gt 0; do
 					# Filter every markup;
 					# NOTE: This isn't a fucking XML AST okay?! I don't have time to write
 					#       that in /bin/sh, as cool as that would be. So this may break
-					#       in extreme certain circumstances.
+					#       in certain circumstances where a user embeds markup not
+					#       supported by the spec.
 					BODY="$(filter_pattern '<[biu]>' "$BODY")";
 					BODY="$(filter_pattern '<a href="*">' "$BODY")";
 					BODY="$(filter_pattern '<[biua]/>' "$BODY")";
@@ -466,7 +471,6 @@ while test "$#" -gt 0; do
 				echo "Warning: Omitting body text because the notification server doesn't support it." >&2;
 			fi;
 
-			# Alert the user we weren't expecting any more arguments.
 			if test -n "$3"; then
 				abrt "unexpected positional argument \"$3\". See \"notify-send.sh --help\".";
 			fi;
@@ -515,8 +519,8 @@ if test -n "$ACMDS"; then
 	# Uses field expansion to form string based array.
 	# Also, use deterministic execution for the rare instance where
 	# the filesystem doesn't support linux executable permissions bit,
-	# or it's been left unset by a package manager.
-	eval "/bin/sh $PROCDIR/notify-action.sh $ID $ACMDS >&- <&- &";
+	# or it's been left unset.
+	eval "setsid /bin/sh $PROCDIR/notify-action.sh $ID $ACMDS >&- <&- &";
 else
 	# Since we know there won't be any scripts to inherit the log files from,
 	# we can use a conditional trap to cleanup on exit. Ignore cleanup if we're
