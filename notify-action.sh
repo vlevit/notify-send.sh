@@ -52,7 +52,6 @@ export NOTIFY_CMD_FAILURE=${NOTIFY_CMD_FAILURE:=true};
 do_action () {
 	ACTION=''; eval "ACTION=\"\$ACTION_$1\"";
 	if test -n "$ACTION"; then
-		# Call setsid to execute the action in a new session.
 		setsid /bin/sh $PROCDIR/notify-exec.sh "$ACTION" & ACTIONED="true";
 	fi;
 }
@@ -61,7 +60,6 @@ conclude () {
 	# Bugfix: twice recurring handler
 	if ${CONCLUDED:=false}; then return; fi; CONCLUDED="true";
 
-	# Only handle the datafile when it exists.
 	if test -s "$GDBUS_PIDF"; then
 		read -r d i p x < "$GDBUS_PIDF";
 
@@ -70,7 +68,6 @@ conclude () {
 		# left alive dangling on an empty FD.
 		test -z "$p" || kill "$p";
 
-		# Always attempt to clean up the PID file.
 		rm -f "$GDBUS_PIDF";
 	fi;
 
@@ -113,7 +110,7 @@ while test "$#" -gt 0; do
 	esac;
 	shift;
 done;
-# consume the command line
+
 if test -z "${ID:=$1}"; then abrt "No notification id provided."; fi; shift;
 if test "$(typeof "$ID")" != "uint"; then
 	abrt "ID must be unsigned integer type.";
@@ -147,9 +144,7 @@ for f in ${TMP}/${APPNAME}.*.dat; do
 	if ! test "$f" -ot "$GDBUS_PIDF"; then continue; fi;
 	read -r d i p x < "$f";
 
-	# Ensure target processes have the same display.
 	if test "$d" != "$DISPLAY"; then continue; fi;
-	# Ensure target processes have the same notification ID.
 	if test "$i" -ne "$ID"; then continue; fi;
 
 	# Fetch group PID from filename.
@@ -163,7 +158,6 @@ done;
 # kill current monitor (on exit and other processable signals)
 trap "conclude" EXIT HUP INT QUIT ABRT TERM;
 
-# start the monitor
 {
 	gdbus monitor --session \
 		--dest org.freedesktop.Notifications \

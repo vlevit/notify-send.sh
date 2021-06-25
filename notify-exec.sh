@@ -27,7 +27,7 @@
 
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
 SELF=$(readlink -n -f "$0");
-PROCDIR="$(dirname "$SELF")"; # Process direcotry.
+PROCDIR="$(dirname "$SELF")";
 APPNAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
 LOGFILE=${LOGFILE:=$TMP/notify-exec.$$.log};
@@ -90,7 +90,8 @@ notify_success() {
 
 CMD_INPUT="$*";
 CMD_STATUS="0";
-CMD_OUTPUT="$($SHELL -c "$*")" || # execution in subshell is safe enough.
+# the || prevents -e from killing us on failure and fills our status variable.
+CMD_OUTPUT="$($SHELL -c "$*")" ||
 CMD_STATUS="$?";
 
 if $NOTIFY_CMD_FAILURE; then
