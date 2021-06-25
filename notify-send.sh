@@ -28,15 +28,12 @@ SELF=$(readlink -n -f "$0");
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
 APPNAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
-LOGFILE=${LOGFILE:=$TMP/notify-send.$$.log};
 SPEC_VERSION="1.2"; # The current spec version we're targeting.
 EXPIRE_TIME=-1;
 ID=0;
 URGENCY=1;
 PRINT_ID=false;
 EXPLICIT_CLOSE=false;
-NOTIFY_CMD_SUCCESS=false;
-NOTIFY_CMD_FAILURE=true;
 CALLER_APPNAME=;
 SUMMARY=; BODY=;
 AKEYS=; ACMDS=; ACTION_COUNT=0;
@@ -60,6 +57,10 @@ SERVER_NAME=;
 SERVER_VENDOR=;
 SERVER_VERSION=;
 SERVER_SPEC_VERSION=;
+
+export NOTIFY_CMD_SUCCESS=false;
+export NOTIFY_CMD_FAILURE=true;
+export SUCCESS_MSG=;
 
 ################################################################################
 ## Functions
@@ -116,7 +117,7 @@ filter_pattern()
 
 help () {
 	echo 'Usage:';
-	echo '\tnotify-send.sh [OPTION...] <SUMMARY> [BODY] - creates a notification';
+	echo '\tnotify-send.sh [OPTION...] SUMMARY [BODY] - creates a notification';
 	echo '';
 	echo 'Help Options:';
 	echo '\t-h|--help                      Show help options.';
@@ -140,9 +141,9 @@ help () {
 	echo '\t-r, --replace=ID               Replace existing notification.';
 	echo '\t-R, --replace-file=FILE        Store and load notification replace ID to/from this file.';
 	echo '\t-s, --close=ID                 Close notification.';
-	echo '\t    --list-capabilities        Shows a list of all optional notification features supported by the server.'
+	echo '\t    --list-capabilities        Shows a list of all optional notification features supported by the server.';
 	echo '\t    --server-info              Prints information about your notification server.';
-	echo '\t    --notify-success           When executing actions, will display a notification on success.';
+	echo '\t    --alert-success=MSG        After successfully executing an action, displays a notification with the body MSG.';
 	echo "\t-q, --quietly-fail             When an action fails, don't display the error notification.";
 	echo '';
 }
@@ -354,10 +355,14 @@ while test "$#" -gt 0; do
 		--spec-version) echo "v$SPEC_VERSION"; exit;;
 		-f|--force-expire) export EXPLICIT_CLOSE=true;;
 		-p|--print-id) PRINT_ID=true;;
-		--notify-success) export NOTIFY_CMD_SUCCESS="true";;
-		-q|--quietly-fail) export NOTIFY_CMD_FAILURE="false";;
 		--list-capabilities) list_capabilities; exit;;
 		--server-info) list_server_info; exit;;
+		-q|--quietly-fail) export NOTIFY_CMD_FAILURE="false";;
+		--alert-success|--alert-success=*)
+			if starts_with "$1" '--alert-success'; then s="${1#*=}"; else shift; s="$1"; fi;
+			export NOTIFY_CMD_SUCCESS="true";
+			export SUCCESS_MSG="$s";
+		;;
 		-u|--urgency|--urgency=*)
 			if starts_with "$1" '--urgency='; then s="${1#*=}"; else shift; s="$1"; fi;
 			process_urgency "$s";
@@ -449,13 +454,13 @@ while test "$#" -gt 0; do
 			if $SERVER_HAS_BODY; then
 				BODY="$2";
 				if $SERVER_HAS_BODY_MARKUP; then
-					if $SERVER_HAS_BODY_HYPERLINKS; then
+					if ! $SERVER_HAS_BODY_HYPERLINKS; then
 						echo "Warning: The notification service on your device doesn't support" >&2;
 						echo "         hyperlinks in it's body text. So they will be filtered out." >&2;
 						BODY="$(filter_pattern '<a href="*">' "$BODY")";
 						BODY="$(filter_pattern '<a/>' "$BODY")";
 					fi;
-					if ${SERVER_HAS_BODY_IMAGES:=false}; then
+					if ! $SERVER_HAS_BODY_IMAGES; then
 						echo "Warning: The notification service on your device doesn't support" >&2;
 						echo "         images in it's body text. So they will be filtered out." >&2;
 						BODY="$(filter_pattern '<img */>' "$BODY")";
@@ -499,7 +504,7 @@ if ! s="$(gdbus call --session \
 	"[${AKEYS#,}]" "{\"urgency\":<byte $URGENCY>$HINTS}" \
 	"int32 ${EXPIRE_TIME}")";
 then
-	abrt "\`gdbus\` failed with:: $s";
+	abrt "\`gdbus\` failed!";
 fi;
 
 # process the ID
@@ -526,12 +531,18 @@ if test -n "$ACMDS"; then
 	# Also, use deterministic execution for the rare instance where
 	# the filesystem doesn't support linux executable permissions bit,
 	# or it's been left unset.
-	eval "setsid /bin/sh $PROCDIR/notify-action.sh $ID $ACMDS >&- <&- &";
+
+	# NOTE: FUCKING BASHISMS holy shit, I need to write a blog post about this.
+	#       So as a result of using the FD destruction syntax "command >&- <&-..."
+	#       I accidentally introduced a feedback loop in common.setup.sh because
+	#       the FD destruction just routes the FDs to /dev/pts/0 which is an r/w
+	#       special file. Fuck my life this took way too long to debug.
+	eval "setsid /bin/sh \"$(sanitize_quote_escapes "$PROCDIR/notify-action.sh")\" $ID $ACMDS >/dev/null &";
 else
 	# Since we know there won't be any scripts to inherit the log files from,
 	# we can use a conditional trap to cleanup on exit. Ignore cleanup if we're
 	# debugging.
-	if ! $DEBUG; then trap "cleanup_pipes" 0; fi;
+	trap "cleanup" 0;
 fi;
 
 # bg task to wait expire time and then actively close notification
@@ -540,6 +551,6 @@ if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -ge 0; then
 	# If the expire time is less than an NTSC standard frame,
 	# it's hardly worth waiting the time to execute this since
 	# based on external factors, you probably won't see it anyway.
-	if test "$EXPIRE_TIME" -gt "33"; then sleep "$((EXPIRE_TIME / 1000))"; fi;
+	#if test "$EXPIRE_TIME" -gt "33"; then sleep "$((EXPIRE_TIME / 1000))"; fi;
 	notify_close "$ID";
 fi;

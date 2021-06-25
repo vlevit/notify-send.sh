@@ -41,6 +41,9 @@ ACTIONC=0;
 #i=; # ID extracted from external files.
 #d=; # DISPLAY extracted from external files.
 
+export NOTIFY_CMD_SUCCESS=${NOTIFY_CMD_SUCCESS:=false};
+export NOTIFY_CMD_FAILURE=${NOTIFY_CMD_FAILURE:=true};
+
 ################################################################################
 ## Imports
 
@@ -54,7 +57,7 @@ do_action () {
 	ACTION=''; eval "ACTION=\"\$ACTION_$1\"";
 	if test -n "$ACTION"; then
 		# Call setsid to execute the action in a new session.
-		setsid "$SHELL" -c "$($ACTION)" & ACTIONED="true";
+		setsid /bin/sh $PROCDIR/notify-exec.sh "$ACTION" & ACTIONED="true";
 	fi;
 }
 
@@ -75,7 +78,7 @@ conclude () {
 		rm -f "$GDBUS_PIDF";
 	fi;
 
-	if ! $ACTIONED && ! $DEBUG; then cleanup_pipes; fi;
+	if ! $ACTIONED; then cleanup; fi;
 }
 
 ################################################################################
@@ -83,21 +86,37 @@ conclude () {
 
 # NOTE: Extra setup of STDIO done in common.lib.sh
 
-if test "$1" = "--help" -o "$1" = "-h"; then
-	echo 'Usage: notify-action.sh ID ACTION_KEY VALUE [[ACTION_KEY] [VALUE]]...';
-	echo 'Description:';
-	echo "\tA suplemental utility for notify-send.sh that handles action events.";
-	echo;
-	echo 'Help Options:';
-	echo '\t-h|--help           Show help options';
-	echo;
-	echo 'Positional Arguments:';
-	echo '\tID          - The event ID to handle.';
-	echo '\tACTION_KEY  - The name of the event to handle.';
-	echo '\tVALUE       - The action to be taken when the event fires.';
-	exit;
-fi;
-
+while test "$#" -gt 0; do
+	case "$1" in
+		-h|--help)
+			echo 'Usage: notify-action.sh ID ACTION_KEY VALUE [ACTION_KEY VALUE]...';
+			echo 'Description:';
+			echo "\tA suplemental utility for notify-send.sh that handles action events.";
+			echo;
+			echo 'Help Options:';
+			echo '\t-h|--help           Show help options';
+			echo;
+			echo 'Application Options:';
+			echo "\t-q, --quietly-fail             When an action fails, don't display the error notification.";
+			echo '\t    --alert-success=MSG        After successfully executing an action, displays a notification with the body MSG.';
+			echo;
+			echo 'Positional Arguments:';
+			echo '\tID          - The event ID to handle.';
+			echo '\tACTION_KEY  - The name of the event to handle.';
+			echo '\tVALUE       - The action to be taken when the event fires.';
+			echo;
+			exit;
+		;;
+		-q|--quietly-fail) NOTIFY_CMD_FAILURE="false";;
+		--notify-success|--notify-success=*)
+			if starts_with "$1" '--notify-success'; then s="${1#*=}"; else shift; s="$1"; fi;
+			NOTIFY_CMD_SUCCESS="true";
+			SUCCESS_MSG="$s";
+		;;
+		*) break 2;;
+	esac;
+	shift;
+done;
 # consume the command line
 if test -z "${ID:=$1}"; then abrt "No notification id provided."; fi; shift;
 if test "$(typeof "$ID")" != "uint"; then
@@ -165,7 +184,6 @@ while IFS=" :.(),'" read -r x x x x e x i x k x; do
 	# number warnings from test by blocking stderr.
 	if test "$i" -ne "$ID" 2>/dev/null; then continue; fi;
 	case "$e" in
-		# Only
 		"NotificationClosed") do_action "close"; break ;;
 		"ActionInvoked") do_action "$k" ;;
 	esac;
