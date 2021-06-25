@@ -35,11 +35,7 @@ ACTIONC=0;
 #CONCLUDED=; Used to bugfix the exit handler.
 #ID=; # Current shell's target ID.
 #DISPLAY=; # Xorg display to use.
-#ACTION_(*); # Actions the shell commit on the $1 regex matching gdbus event.
-#x=; # General use temporary variable.
-#p=; # PID extracted from external files.
-#i=; # ID extracted from external files.
-#d=; # DISPLAY extracted from external files.
+#ACTION_(.+); # Actions the shell commit on the $1 regex matching gdbus event.
 
 export NOTIFY_CMD_SUCCESS=${NOTIFY_CMD_SUCCESS:=false};
 export NOTIFY_CMD_FAILURE=${NOTIFY_CMD_FAILURE:=true};

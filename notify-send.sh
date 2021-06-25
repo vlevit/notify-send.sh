@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/sh -e
 # @file - notify-send.sh
 # @brief - drop-in replacement for notify-send with more features
 ###############################################################################
@@ -379,7 +379,17 @@ while test "$#" -gt 0; do
 			if starts_with "$1" '--icon='; then s="${1#*=}"; else shift; s="$1"; fi;
 
 			# NOTE: We don't need to assist the search path at all or modify
-			#       the path into a URI, I misunderstood the spec.
+			#       the path into a URI, I may have misunderstood the spec,
+			#       or `gdbus` is nice and handles icon resolution for us.
+			#       I think `gdbus` is just being nice. It could also be the server
+			#       though. I'm running Xfce Notify Daemon v0.4.2 and I don't have
+			#       any other servers to test my hypotheses on.
+			#
+			# The code below might be useful if it's just the server being nice.
+			# Standard dictates I should manually process this, but if gdbus
+			# does it for us, there's no sense wasting the resources. Especially
+			# because shell scripting is so inefficient.
+			#
 			# THEME=$(gsettings get org.gnome.desktop.interface icon-theme)
 			# ICON="$(readlink -n -f "$s")";
 
@@ -485,9 +495,7 @@ while test "$#" -gt 0; do
 			if test -n "$3"; then
 				abrt "unexpected positional argument \"$3\". See \"notify-send.sh --help\".";
 			fi;
-
-			s="$#"; # Reuse for temporary storage of shifts remaining.
-			shift "$((s - 1))"; # Clear remaining arguments - 1 so the loop stops.
+			break;
 		;;
 	esac;
 	shift;
@@ -531,26 +539,18 @@ if test -n "$ACMDS"; then
 	# Also, use deterministic execution for the rare instance where
 	# the filesystem doesn't support linux executable permissions bit,
 	# or it's been left unset.
-
-	# NOTE: FUCKING BASHISMS holy shit, I need to write a blog post about this.
-	#       So as a result of using the FD destruction syntax "command >&- <&-..."
-	#       I accidentally introduced a feedback loop in common.setup.sh because
-	#       the FD destruction just routes the FDs to /dev/pts/0 which is an r/w
-	#       special file. Fuck my life this took way too long to debug.
-	eval "setsid /bin/sh \"$(sanitize_quote_escapes "$PROCDIR/notify-action.sh")\" $ID $ACMDS >/dev/null &";
+	eval "setsid /bin/sh "$PROCDIR/notify-action.sh" $ID $ACMDS >/dev/null &";
 else
 	# Since we know there won't be any scripts to inherit the log files from,
-	# we can use a conditional trap to cleanup on exit. Ignore cleanup if we're
-	# debugging.
+	# cleanup on exit.
 	trap "cleanup" 0;
 fi;
 
-# bg task to wait expire time and then actively close notification
 if $EXPLICIT_CLOSE && test "$EXPIRE_TIME" -ge 0; then
 	# Expire timeout for gdbus call is in milliseconds
 	# If the expire time is less than an NTSC standard frame,
 	# it's hardly worth waiting the time to execute this since
 	# based on external factors, you probably won't see it anyway.
-	#if test "$EXPIRE_TIME" -gt "33"; then sleep "$((EXPIRE_TIME / 1000))"; fi;
+	if test "$EXPIRE_TIME" -gt "33"; then sleep "$((EXPIRE_TIME / 1000))"; fi;
 	notify_close "$ID";
 fi;

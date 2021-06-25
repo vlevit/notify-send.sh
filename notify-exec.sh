@@ -81,11 +81,11 @@ while test "$#" -gt 0; do
 done;
 
 notify_error() {
-	NOTIFIED="true"; /bin/sh $PROCDIR/notify-send.sh -q -t 1 -u critical "$1" "$2";
+	NOTIFIED="true"; /bin/sh "$PROCDIR/notify-send.sh" -q -t 1 -u critical "$1" "$2";
 }
 
 notify_success() {
-	NOTIFIED="true"; /bin/sh $PROCDIR/notify-send.sh -q -t 1 -u low "$1" "$2";
+	NOTIFIED="true"; /bin/sh "$PROCDIR/notify-send.sh" -q -t 1 -u low "$1" "$2";
 }
 
 CMD_INPUT="$*";
@@ -95,7 +95,7 @@ CMD_STATUS="$?";
 
 if $NOTIFY_CMD_FAILURE; then
 	case "$CMD_STATUS" in
-		0);;
+		0);; # Pass on success.
 		127) notify_error "Error: Command Not Found" \
 			"<b>Raw Output:</b> <i>\`$CMD_OUTPUT\`</i>\n<b>PATH:<\b> <i>$PATH<i>";;
 		*) notify_error "Error: Unknown" \
