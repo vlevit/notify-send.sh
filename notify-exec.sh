@@ -81,11 +81,15 @@ while test "$#" -gt 0; do
 done;
 
 notify_error() {
-	NOTIFIED="true"; /bin/sh "$PROCDIR/notify-send.sh" -q -t 1 -u critical "$1" "$2";
+	/bin/sh "$PROCDIR/notify-send.sh" -q -t 1 -u critical \
+		"Action Failed: $1" \
+		"<b>Action:</b> <u><i>$CMD_INPUT</i></u>\n<a href=\"file://$LOGFILE.action\">See the full log in \`$LOGPATH.action\`</a>\n<b>Raw Output:</b> <i>$CMD_OUTPUT</i>";
+	NOTIFIED="true";
 }
 
 notify_success() {
-	NOTIFIED="true"; /bin/sh "$PROCDIR/notify-send.sh" -q -t 1 -u low "$1" "$2";
+	/bin/sh "$PROCDIR/notify-send.sh" -q -t 1 -u low "Success!" "$SUCCESS_MSG";
+	NOTIFIED="true";
 }
 
 CMD_INPUT="$*";
@@ -94,18 +98,48 @@ CMD_STATUS="0";
 CMD_OUTPUT="$($SHELL -c "$*")" ||
 CMD_STATUS="$?";
 
-if $NOTIFY_CMD_FAILURE; then
-	case "$CMD_STATUS" in
-		0);; # Pass on success.
-		127) notify_error "Error: Command Not Found" \
-			"<b>Raw Output:</b> <i>\`$CMD_OUTPUT\`</i>\n<b>PATH:<\b> <i>$PATH<i>";;
-		*) notify_error "Error: Unknown" \
-			"The action failed for an unknown reason.";;
-	esac;
-fi;
+# Print full log to file.
+printf '%s' "$CMD_OUTPUT" > "$LOGFILE.action";
+# Two heads truncate the log into a reasonable size for a notification body.
+CMD_OUTPUT="$(printf '%s' "$CMD_OUTPUT" | head -4 | head 512)";
+
 
 if $NOTIFY_CMD_SUCCESS && test "$CMD_STATUS" -eq 0; then
-	notify_success "Success!" "$SUCCESS_MSG";
+	rm -f "$LOGFILE.action";
+	notify_success;
+elif $NOTIFY_CMD_FAILURE; then
+	case "$CMD_STATUS" in
+		1)        notify_error "Script failed to complete";;
+		2)        notify_error "Misuse of shell built-in";;
+		126)      notify_error "Could not execute";;
+		127)      notify_error "Command not found";;
+		128)      notify_error "Invalid argument to \"exit\"";;
+		# TODO: https://www.man7.org/linux/man-pages/man7/signal.7.html
+		#     Only supporting Arm and x86 for now since other architechtures
+		#     haven't hit the consumer market, and coding that now would be a
+		#     huge pain. The signals below may need broken out in the future!
+		129)      notify_error "Hangup detected";;
+		130)      notify_error "Process interrupted from keyboard";;
+		131)      notify_error "Process quit from keyboard";;
+		132)      notify_error "Illegal instruction";;
+		133)      notify_error "Trace or breakpoint trap";;
+		134)      notify_error "Abort signal dispatched";;
+		135)      notify_error "Bus error or bad memory access";;
+		136)      notify_error "Floating-point exception";;
+		137)      notify_error "Kill signal recieved";;
+		138)      notify_error "Exited due to user reserved signal";;
+		139)      notify_error "Segfault / invalid memory reference";;
+		140)      notify_error "Exited due to user reserved signal";;
+		141)      notify_error "Broken pipe / write to pipe with no readers";;
+		142)      notify_error "Timer signal dispatched";;
+		143)      notify_error "Termination signal";;
+		144)      notify_error "Stack fault on coprocessor";;
+		145)      notify_error "Child stopped or terminated";;
+
+		# Like hell I'm processing the rest of these. They shouldn't ever be
+		# seen by most scripts, so I'm taking the side of lazyness today.
+		*)        notify_error "Unknown Error";;
+	esac;
 fi;
 
 if ! $NOTIFIED; then cleanup; fi;

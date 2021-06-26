@@ -30,7 +30,7 @@ export SHELL="$SHELL";
 
 # BUGFIX: Prevents nested shells from being unable to log.
 export XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR";
-export LOGFILE=${LOGFILE:=$TMP/notify-send.$$.log};
+export LOGFILE="${LOGFILE:=$TMP/notify-send.$$.log}";
 export DEBUG="${DEBUG:=false}";
 
 # Record initial FDs for processing later.
@@ -61,11 +61,11 @@ if $DEBUG; then
 fi;
 
 # And this will pick up the log, redirecting it to the terminal if we have one.
-if test -n "$FD1" -a "$FD1" != "\dev\null" -a "$FD1" != "$LOGFILE.1"; then
-	tail --pid=$$ -f $LOGFILE.1 >> "$FD1" & trap "kill -9 '$!';" 0;
+if test -n "$FD1" -a "$FD1" != "/dev/null" -a "$FD1" != "$LOGFILE.1"; then
+	tail --pid="$$" -f $LOGFILE.1 >> "$FD1" & trap "kill $!;" 0;
 fi;
-if test -n "$FD2" -a "$FD2" != "\dev\null" -a "$FD1" != "$LOGFILE.2"; then
-	tail --pid=$$ -f $LOGFILE.2 >> "$FD2" & trap "kill -9 '$!';" 0;
+if test -n "$FD2" -a "$FD2" != "/dev/null" -a "$FD2" != "$LOGFILE.2"; then
+	tail --pid="$$" -f $LOGFILE.2 >> "$FD2" & trap "kill $!;" 0;
 fi;
 
 # XXX: Fixes a racing condition caused by the shared logging setup.
