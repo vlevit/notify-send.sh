@@ -1,10 +1,10 @@
-#!/bin/sh -e
+#!/bin/sh
 # @file - notify-exec.sh
 # @brief - An internal service for notify-send.sh that encapsulates the
 #          action taken by a notification and provides user alerts for
 #          command failure and other statuses.
 ###############################################################################
-# Copyright (C) 2015-2020 notify-send.sh authors (see AUTHORS file)
+# Copyright (C) 2015-2021 notify-send.sh authors (see AUTHORS file)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -40,7 +40,7 @@ NOTIFIED="false";
 ################################################################################
 ## Imports
 
-. $PROCDIR/common.setup.sh; # Ensures we have debug and logfile stuff together.
+. $PROCDIR/notify-common.d/setup.sh; # Ensures we have debug and logfile stuff together.
 
 ################################################################################
 ## Functions

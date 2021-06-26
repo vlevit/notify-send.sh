@@ -1,8 +1,8 @@
-#!/bin/sh -e
+#!/bin/sh
 # @file - notify-action.sh
 # @brief - An internal service for notify-send.sh that tracks notify actions.
 ###############################################################################
-# Copyright (C) 2015-2020 notify-send.sh authors (see AUTHORS file)
+# Copyright (C) 2015-2021 notify-send.sh authors (see AUTHORS file)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -43,8 +43,8 @@ export NOTIFY_CMD_FAILURE=${NOTIFY_CMD_FAILURE:=true};
 ################################################################################
 ## Imports
 
-. $PROCDIR/common.functions.sh; # Import shared code.
-. $PROCDIR/common.setup.sh; # Ensures we have debug and logfile stuff together.
+. $PROCDIR/notify-common.d/functions.sh; # Import shared code.
+. $PROCDIR/notify-common.d/setup.sh; # Ensures we have debug and logfile stuff together.
 
 ################################################################################
 ## Functions

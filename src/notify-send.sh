@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh
 # @file - notify-send.sh
 # @brief - drop-in replacement for notify-send with more features
 ###############################################################################
@@ -65,8 +65,8 @@ export SUCCESS_MSG=;
 ################################################################################
 ## Functions
 
-. "$PROCDIR/common.functions.sh"; # Import shared code.
-. "$PROCDIR/common.setup.sh"; # Ensures we have debug and logfile stuff together.
+. "$PROCDIR/notify-common.d/functions.sh"; # Import shared code.
+. "$PROCDIR/notify-common.d/setup.sh"; # Ensures we have debug and logfile stuff together.
 
 # @describe - Allows you to filter characters from a given string. Note that
 #             using multiple strings will concatenate them into the output.
