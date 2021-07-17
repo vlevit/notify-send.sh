@@ -33,7 +33,7 @@ TMP="${XDG_RUNTIME_DIR:-/tmp}";
 LOGFILE=${LOGFILE:=$TMP/notify-exec.$$.log};
 RESULT_OUTPUT=; RESULT_STATUS=;
 NOTIFY_CMD_FAILURE=${NOTIFY_CMD_FAILURE:=true};
-NOTIFY_CMD_SUCCESS=${NOTIFY_CMD_FAILURE:=false};
+NOTIFY_CMD_SUCCESS=${NOTIFY_CMD_SUCCESS:=false};
 SUCCESS_MSG=${SUCCESS_MSG:=};
 NOTIFIED="false";
 
@@ -107,7 +107,7 @@ CMD_OUTPUT="$(printf '%s' "$CMD_OUTPUT" | head -4 | head 512)";
 if $NOTIFY_CMD_SUCCESS && test "$CMD_STATUS" -eq 0; then
 	rm -f "$LOGFILE.action";
 	notify_success;
-elif $NOTIFY_CMD_FAILURE; then
+elif $NOTIFY_CMD_FAILURE && test "$CMD_STATUS" -ne 0; then
 	case "$CMD_STATUS" in
 		1)        notify_error "Script failed to complete";;
 		2)        notify_error "Misuse of shell built-in";;

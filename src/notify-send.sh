@@ -150,29 +150,29 @@ help () {
 
 list_capabilities() {
 	printf 'Status of server capabilities:\n';
-	printf '%s' "\"actions\"         - Status: ";
+	printf '%s' "\"actions\"         - ";
 	if ! $SERVER_HAS_ACTIONS; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
-	printf '%s' "\"action-icons\"    - Status: ";
+	printf '%s' "\"action-icons\"    - ";
 	if ! $SERVER_HAS_ACTION_ICONS; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
-	printf '%s' "\"body\"            - Status: ";
+	printf '%s' "\"body\"            - ";
 	if ! $SERVER_HAS_BODY; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
-	printf '%s' "\"body-hyperlinks\" - Status: ";
+	printf '%s' "\"body-hyperlinks\" - ";
 	if ! $SERVER_HAS_BODY_HYPERLINKS; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
-	printf '%s' "\"body-images\"     - Status: ";
+	printf '%s' "\"body-images\"     - ";
 	if ! $SERVER_HAS_BODY_IMAGES; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
-	printf '%s' "\"body-markup\"     - Status: ";
+	printf '%s' "\"body-markup\"     - ";
 	if ! $SERVER_HAS_BODY_MARKUP; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
 
 	# NOTE: these are mutually exclusive, so we only need to check one.
-	printf '%s' "\"icon-frames\"     - Status: ";
+	printf '%s' "\"icon-frames\"     - ";
 	if $SERVER_HAS_ICON_MULTI; then printf 'MULTI\n';
 	elif $SERVER_HAS_ICON_STATIC; then printf 'STATIC\n';
 	else printf 'UNSUPPORTED\n';
 	fi;
 
-	printf '%s' "\"persistence\"     - Status: ";
+	printf '%s' "\"persistence\"     - ";
 	if ! $SERVER_HAS_PERSISTENCE; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
-	printf '%s' "\"sound\"           - Status: ";
+	printf '%s' "\"sound\"           - ";
 	if ! $SERVER_HAS_SOUND; then printf 'UN'; fi; printf '%b' 'SUPPORTED\n';
 	echo;
 }
@@ -294,7 +294,7 @@ process_special_action() {
 	if test -z "$2"; then abrt "Command must not be empty"; fi;
 	if test "$1" = 'default'; then
 		# That documentation is really hard to read, yes this is correct.
-		AKEYS="$AKEYS,\"default\",\"Okay\"";
+		AKEYS="$AKEYS,\"default\",\"\"";
 	fi;
 
 	ACMDS="$ACMDS \"$1\" \"$(sanitize_quote_escapes "$2")\"";
