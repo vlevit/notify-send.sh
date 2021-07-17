@@ -1,10 +1,21 @@
 # Testing `notify-send.sh`
 
+**Okay, so long story short, I'm not working on this for a while because it
+demands that I write chroot encapsulation** I've done this before and
+in this situation it looks to be far too much time to be worth it. So this
+is going untested unless someone else wants to finish my work. Or until
+I work back to this, which probably won't be until the next millennia.
+
+&#x1F627; Please help.
+
+---
+
 To test this script, you'll need at least a single POSIX compliant shell,
 and `xdotool` which provides the Xorg Window manipulation needed for
 automatic testing. Along with all the other dependencies `notify-send.sh`
 needs to run by itself.
 
+(**I've only personally tested `dash`...**)
 This is a short list of widely used shells:
  * [Korn Shell][ksh]
  * [C Shell][csh]
@@ -18,11 +29,11 @@ There are three suites:
     known POSIX compliant shell you have installed on your machine and
     compiles the result. Using CLI arguments, it can also include the
     `manual.sh` tests, but this isn't recommended.
- 2. `automanual.sh` runs the validation for each notify script call.
+ 2. `automanual.sh` runs the validation for each notify script on the current server.
  3. `manual.sh` should only be run for comprehensive diagnostics when
     something's gone terribly wrong. This suite includes any test that
     I haven't been able to engineer a way to automate around. It's all
-    manual validation honey! 
+    manual validation honey!
 
 
 Until I validate CI can handle emulating Xorg and everything else it needs

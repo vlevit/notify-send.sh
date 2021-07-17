@@ -1,4 +1,4 @@
-#!/bin/sh
+# NOTE: this should be sourced
 ###############################################################################
 # Copyright (C) 2015-2021 notify-send.sh authors (see AUTHORS file)
 #
@@ -19,10 +19,10 @@
 ## Globals (Comprehensive)
 
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
-SELF=$(readlink -n -f "$0");
-PROCDIR="$(dirname "$SELF")";
-APPNAME="$(basename "$SELF")";
-TMP="${XDG_RUNTIME_DIR:-/tmp}";
+#SELF=$(readlink -n -f "$0");
+#PROCDIR="$(dirname "$SELF")";
+#APPNAME="$(basename "$SELF")";
+#TMP="${XDG_RUNTIME_DIR:-/tmp}";
 
 ################################################################################
 ## Imports
@@ -30,17 +30,8 @@ TMP="${XDG_RUNTIME_DIR:-/tmp}";
 ################################################################################
 ## Functions
 
-################################################################################
-## Main Script
+# TODO: test every feature using `Xfce Notify Daemon`
 
-# Well, long story short, this is going to be a real pain to implement.
-# First we need to ensure that every instance of
-
-# TODO: Find current users GUI session client, and determine what
-#       notification server it's running. We need to launch that server
-#       in an envrionment where we can test each shell for compatability.
-#       The most likely candidate would be within a chroot. But using
-#       a chroot would require a special user intended to initialize the
-#       Desktop. I'm not sure if any CI envrionments are robust enough
-#       to offer that level of account control. I'm also unsure of the
-#       resource cost for initializing the environment. 
+notify_send(){
+	/bin/sh $PROCDIR/../src/notify-send.sh $*;
+}

@@ -1,85 +1,138 @@
-This is a fork of https://github.com/vlevit/notify-send.sh
-The main purpose and differences are:
-* Refactored to remove all the unnecessary external tools (dc, bc, sed), <<< here-docs (which create temp files behind the scenes), subshells (all but one use of foo=$(foo ...) could have been done with direct variables and saved a bunch of forks (and now are), and generally optimize and tighten the code aside from those issues.
-* Improve the handling of actions. For a lengthy description, see:
-  https://github.com/bkw777/mainline/blob/master/lib/notify_send/mainline_changes.txt
-* Also a lot of admittedly gratuitous stylistic changes because I just prefer short variable names except where actually useful, and prefer foo && { stuff } vs if foo ;then stuff ;fi  etc
+# `notify-send.sh`
+notify-send.sh is a replacement solution for notify-send (from
+libnotify) with many extra features you might find useful.
 
-# notify-send.sh
+This is a fork of [bkw777's][bkw777] fork of [vlevit's original script!][vlevit]
+The main purpose of my fork is to address portability but I added a lot of
+other features too:
+ * I ensured that `notify-send.sh` and the other child services are now
+   written in nothing but pure [POSIX][POSIX] compliant shell. Which includes
+   `ksh`, `csh`, `bash`, `ash`, `dash`, `fish` and more shells.
+ * In order to make this POSIX compliant, the stylistic changes included
+   in bkw777's fork had to be removed.
+ * `notify-action.sh` is now more user friendly.
+ * Added `notify-exec.sh` to serve as an action status notifier.
+ * `notify-send.sh` can now report information about the notification server.
+ * I made a great deal of effort to ensure this complies with [standard][standard].
 
-notify-send.sh is a drop-in replacement for notify-send (from
-libnotify) with ability to update and close existing notifications.
+The reason I chose **bkw777's** fork as my base, was the effort they put in
+to remove the external tools, here-docs, make `notify-send` more compliant
+with the notification client standards, and [other useful features][big-changes].
 
-The dependencies are `bash` and `gdbus` (shipped with glib2).
+The dependencies are GNU's `coreutils`, `gdbus` (shipped with glib2), and a any
+POSIX compliant shell as a runtime provider.
 
-In Debian and Ubuntu you can ensure all dependencies are installed
-with the following command:
+In Debian and Ubuntu you can ensure all dependencies are installed with the
+following command (this also prevents automatic install state clobbering):
 
-    $ sudo apt-get install bash libglib2.0-bin
+```sh
+if ! dpkg -S "$(type -p gdbus)"; then sudo apt-get install libglib2.0-bin; fi;
+```
 
-## Usage
+### Examples
 
-notify-send.sh has all command line options of notify-send with a few
-additional ones:
+If we want to notify a user of a new email we can run something like the following:
+```sh
+notify-send.sh \
+	--icon=mail-unread \
+	--app-name=mail \
+	--hint=string:sound-name:message-new-email \
+	"Subject" "Message";
+```
 
-    Usage:
-      notify-send.sh [OPTION...] <SUMMARY> [BODY] - create a notification
-
-    Help Options:
-      -?|--help                         Show help options
-
-    Application Options:
-      -u, --urgency=LEVEL               Specifies the urgency level (low, normal, critical).
-      -t, --expire-time=TIME            Specifies the timeout in milliseconds at which to expire the notification.
-      -a, --app-name=APP_NAME           Specifies the app name for the icon
-      -i, --icon=ICON[,ICON...]         Specifies an icon filename or stock icon to display.
-      -c, --category=TYPE[,TYPE...]     Specifies the notification category.
-      -h, --hint=TYPE:NAME:VALUE        Specifies basic extra data to pass. Valid types are int, double, string and byte.
-      -o, --action=LABEL:COMMAND        Specifies an action. Can be passed multiple times. LABEL is usually a button's label. COMMAND is a shell command executed when action is invoked.
-      -d, --default-action=COMMAND      Specifies the default action which is usually invoked by clicking the notification.
-      -l, --close-action=COMMAND        Specifies the action invoked when the notification is closed.
-      -p, --print-id                    Print the notification ID to the standard output.
-      -r, --replace=ID                  Replace existing notification.
-      -R, --replace-file=FILE           Store and load notification replace ID to/from this file.
-      -s, --close=ID                    Close notification.
-      -v, --version                     Version of the package.
+Just want to say something?
+```sh
+notify-send.sh "Hello World!" "carpe diem! lorem ipsum, tu amo.";
+```
 
 
-So, for example, to notify a user of a new email we can run:
+#### Lifetime Management
+Let's say you want to update the body of a notification, you can do that!
+```sh
+# To replace or close existing message first we should know its id. To
+# get id we have to run notify-send.sh with `--print-id`.
+notify-send.sh --print-id "Subject" "Message"
+# Prints: 10
 
-    $ notify-send.sh --icon=mail-unread --app-name=mail --hint=string:sound-name:message-new-email Subject Message
+# Now we can update this notification using `--replace` option.
+notify-send.sh --replace=10 "New Subject" "New Message"
 
-To replace or close existing message first we should know its id. To
-get id we have to run notify-send.sh with `--print-id`:
+# Now we may want to close the notification if we didn't set an appropriate
+# timeout.
+notify-send.sh --close=10
+```
 
-    $ notify-send.sh --print-id Subject Message
-    10
+Maybe you need to update the same notification several times.
+The `--replace-file` parameter is your best friend.
+```sh
+# Every time this runs, it increases the volume by 5% and displays the new volume.
+notify-send.sh \
+	--replace-file=/tmp/volumenotification \
+	"Increase Volume" "$(amixer sset Master 5%+ | awk '/[0-9]+%/ {print $2,$5}')"
+```
 
-Now we can update this notification using `--replace` option:
 
-    $ notify-send.sh --replace=10 --print-id "New Subject" "New Message"
-    10
+#### User Action Triggers
 
-Now we may want to close the notification:
+Sometimes you'll need to have users interact with a notification to trigger
+an action. There are three different types of action triggers you can use
+to achieve your goals.
 
-    $ notify-send.sh --close=10
+```sh
+# The following will create a notification with a default action.
+# Default actions are usually invoked when the notification area is clicked.
+# NOTE: No two notification servers are the same and some implement this
+#       feature differently. Know your target operating system and server.
+notify-send.sh \
+	-d "notify-send.sh 'Default Action' 'I was triggered as a default action!'" \
+	"Click Me!" "Please 🥺";
 
-Use `--replace-file` to make sure that no more than one notification
-is created per file. For example, to increase volume by 5% and show
-the current volume value you can run:
+# This will make a button using the quoted text before the colon.
+# Multiple buttons can be used on the same notification.
+notify-send.sh \
+	-o "Click Me!":"notify-send.sh 'Wow <3' 'Click harder senpai!'" \
+	"I have a button UwU" "You should press it...";
 
-    $ notify-send.sh --replace-file=/tmp/volumenotification "Increase Volume" "$(amixer sset Master 5%+ | awk '/[0-9]+%/ {print $2,$5}')"
+# Finally, this runs a command when the notification closes regardless of
+# whether or not any other action was executed.
+notify-send.sh \
+	-l "notify-send.sh '(╬ ಠ益ಠ)' 'ლ(ಠ益ಠლ)'" \
+	"I'm angy." "No touchy!";
+```
 
-You can add a button to the notification with `-o` or `--default-action=`:
+#### Diagnostics / Server Information
 
-    $ notify-send.sh "Subject" "Message" -o "Show another notification:notify-send.sh 'new Subject' 'New Message'"
+Find information about your notification server by using the
+`--server-info` and `--list-capabilities` options.
 
-You can specify multiple actions by passing `-o` multiple times. Use
-`-d` or `--default-action` for action which is usually invoked when
-notification area is clicked. Use `-l` or `--close-action` for action
-performed when notification is closed.
+```sh
+# On my machine I'm running Xfce as my session manager.
+notify-send.sh --server-info;
+# Name:           'Xfce Notify Daemon'
+# Vendor:         'Xfce'
+# Server Version: '0.4.2'
+# Spec. Version:  '1.2'
+```
 
-    $ notify-send.sh "Subject" "Message" \
-        -d "notify-send.sh 'Default Action'" \
-        -o "Button Action:notify-send.sh 'Button Action'" \
-        -l "notify-send.sh 'Close Action'"
+```sh
+# You get the gist. Right?
+notify-send.sh --list-compatabilies;
+# Status of server capabilities:
+# "actions"         - SUPPORTED
+# "action-icons"    - UNSUPPORTED
+# "body"            - SUPPORTED
+# "body-hyperlinks" - SUPPORTED
+# "body-images"     - UNSUPPORTED
+# "body-markup"     - SUPPORTED
+# "icon-frames"     - STATIC
+# "persistence"     - UNSUPPORTED
+# "sound"           - UNSUPPORTED
+```
+
+
+[vlevit]: https://github.com/vlevit/notify-send.sh
+[bkw777]: https://github.com/bkw777/notify-send.sh
+[POSIX]: https://pubs.opengroup.org/onlinepubs/9699919799
+[coreutils]: https://git.savannah.gnu.org/cgit/coreutils.git/tree/README?h=v8.27#n8
+[big-changes]: https://github.com/bkw777/mainline/blob/master/lib/notify_send/mainline_changes.txt
+[standard]: https://developer.gnome.org/notification-spec/

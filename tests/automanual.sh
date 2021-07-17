@@ -24,6 +24,8 @@ PROCDIR="$(dirname "$SELF")";
 APPNAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
 
+MANUAL_FALLBACK='false';
+
 # Capability Flags (these are used later with the ${var:=false} matcher)
 SERVER_HAS_ACTION_ICONS="false";
 SERVER_HAS_ACTIONS="false";
@@ -46,28 +48,6 @@ SERVER_SPEC_VERSION=;
 
 ################################################################################
 ## Functions
-
-notify_send(){
-	/bin/sh $PROCDIR/../src/notify-send.sh $*;
-}
-
-get_notification_heuristics(){
-	# NOTE: This creates a notification with a large body,
-	notify_send "xxxxxxxxxxxx
-
-
-xxxxxxxxxxxx" "";
-	NOTIFY_DAEMON="$(
-		dotool getwindowname $(
-			xdotool search \
-				--onlyvisible \
-				--limit 1 \
-				--name "xfce4-notifyd"
-		)
-	)";
-
-	test -n "$NOFITY_DAEMON";
-}
 
 # @describe - Allows you to filter characters from a given string. Note that
 #             using multiple strings will concatenate them into the output.
@@ -280,7 +260,6 @@ process_capabilities() {
 }
 
 process_server_info() {
-	c='';
 	eval "set $*"; # expand variables from pre-tic-quoted list.
 	SERVER_NAME="$1";
 	SERVER_VENDOR="$2";
@@ -308,3 +287,19 @@ s="$(gdbus call --session \
 
 s="$(filter_chars '[](),' "$s")";
 process_capabilities "$s";
+
+case "$1" in
+	-h|--help);;
+	--manual-fallback) MANUAL_FALLBACK='true';;
+esac;
+
+if test -e $PROCDIR/auto-server/${SERVER_NAME}.sh; then
+	. $PROCDIR/auto-server/${SERVER_NAME}.sh;
+else
+	if $MANUAL_FALLBACK; then
+		/bin/sh $PROCDIR/manual.sh;
+	else
+		printf '%s\n' "Error: unable to run test suite for '$SERVER_NAME', unrecognized server." >&2;
+		exit 1;
+	fi;
+fi;
