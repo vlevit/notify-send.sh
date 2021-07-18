@@ -65,8 +65,9 @@ export SUCCESS_MSG=;
 ################################################################################
 ## Functions
 
-. "$PROCDIR/notify-common.d/functions.sh"; # Import shared code.
+# XXX: setup MUST come before functions, otherwise stderr and stdout get all screwy.
 . "$PROCDIR/notify-common.d/setup.sh"; # Ensures we have debug and logfile stuff together.
+. "$PROCDIR/notify-common.d/functions.sh"; # Import shared code.
 
 # @describe - Allows you to filter characters from a given string. Note that
 #             using multiple strings will concatenate them into the output.
@@ -346,6 +347,10 @@ s="$(gdbus call --session \
 
 s="$(filter_chars '[](),' "$s")";
 process_capabilities "$s";
+
+if test "$#" -eq 0; then
+	help; exit;
+fi;
 
 while test "$#" -gt 0; do
 	case "$1" in

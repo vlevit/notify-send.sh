@@ -24,7 +24,7 @@
 ## Functions
 
 echo() { printf '%b\n' "$*"; }
-abrt () { echo "Error in '$SELF': $*" >&2; exit 1; }
+abrt() { echo "Error in '$SELF': $*" >&2; exit 1; }
 
 # @describe - Prints the simplest primitive type of a value.
 # @usage - typeof [-g] VALUE

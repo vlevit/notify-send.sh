@@ -44,8 +44,8 @@ export SUCCESS_MSG="$SUCCESS_MSG"
 ################################################################################
 ## Imports
 
-. "$PROCDIR/notify-common.d/functions.sh"; # Import shared code.
 . "$PROCDIR/notify-common.d/setup.sh"; # Ensures we have debug and logfile stuff together.
+. "$PROCDIR/notify-common.d/functions.sh"; # Import shared code.
 
 ################################################################################
 ## Functions
@@ -166,13 +166,11 @@ trap "conclude" EXIT HUP INT QUIT ABRT TERM;
 
 	echo "$!" >> "$GDBUS_PIDF";
 } | \
-while IFS=" :.(),'" read -r x x x x e x i x k x; do
+while # shellcheck disable=SC2034
+IFS=" :.(),'" read -r x x x x e x i x k x; do
 	# XXX: The above read isn't as robust as a regex search and may cause
 	#      this script to break if gdbus's logging format ever changes.
 	#      But it's lightning fast and portable, so the trade is worth it.
-
-	# XXX: Suppression of SC2034 of shellcheck:
-	true "$x";
 
 	# The first two lines always contain garbage data, so supress the illegal
 	# number warnings from test by blocking stderr.
