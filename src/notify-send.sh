@@ -26,8 +26,8 @@
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
 SELF=$(readlink -n -f "$0");
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
-APPNAME="$(basename "$SELF")";
-TMP="${XDG_RUNTIME_DIR:-/tmp}";
+#APPNAME="$(basename "$SELF")";
+#TMP="${XDG_RUNTIME_DIR:-/tmp}";
 SPEC_VERSION="1.2"; # The current spec version we're targeting.
 EXPIRE_TIME=-1;
 ID=0;
@@ -539,7 +539,7 @@ if test -n "$ACMDS"; then
 	# Also, use deterministic execution for the rare instance where
 	# the filesystem doesn't support linux executable permissions bit,
 	# or it's been left unset.
-	eval "setsid /bin/sh "$PROCDIR/notify-action.sh" $ID $ACMDS >/dev/null &";
+	eval "setsid /bin/sh \"$PROCDIR/notify-action.sh\" $ID $ACMDS >/dev/null &";
 else
 	# Since we know there won't be any scripts to inherit the log files from,
 	# cleanup on exit.

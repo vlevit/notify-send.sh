@@ -28,19 +28,18 @@
 # Symlink script resolution via coreutils (exists on 95+% of linux systems.)
 SELF=$(readlink -n -f "$0");
 PROCDIR="$(dirname "$SELF")";
-APPNAME="$(basename "$SELF")";
+#APPNAME="$(basename "$SELF")";
 TMP="${XDG_RUNTIME_DIR:-/tmp}";
-LOGFILE=${LOGFILE:=$TMP/notify-exec.$$.log};
-RESULT_OUTPUT=; RESULT_STATUS=;
-NOTIFY_CMD_FAILURE=${NOTIFY_CMD_FAILURE:=true};
-NOTIFY_CMD_SUCCESS=${NOTIFY_CMD_SUCCESS:=false};
-SUCCESS_MSG=${SUCCESS_MSG:=};
+LOGFILE="${LOGFILE:=$TMP/notify-exec.$$.log}";
+NOTIFY_CMD_FAILURE="${NOTIFY_CMD_FAILURE:=true}";
+NOTIFY_CMD_SUCCESS="${NOTIFY_CMD_SUCCESS:=false}";
+SUCCESS_MSG="${SUCCESS_MSG:=}";
 NOTIFIED="false";
 
 ################################################################################
 ## Imports
 
-. $PROCDIR/notify-common.d/setup.sh; # Ensures we have debug and logfile stuff together.
+. "$PROCDIR/notify-common.d/setup.sh"; # Ensures we have debug and logfile stuff together.
 
 ################################################################################
 ## Functions

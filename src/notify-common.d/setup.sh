@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # @file - common.setup.sh
 # @brief - Shared setup code for the notify-send.sh suite.
 ###############################################################################
@@ -24,7 +25,9 @@
 
 # SELF=; # The path to the currently executing script.
 TMP=${XDG_RUNTIME_DIR:-/tmp};
-VERSION="2.0.0-rc.m3tior"; # Should be included in all scripts.
+
+# shellcheck disable=SC2059,SC2034
+VERSION="2.0.0+m3tior"; # Should be included in all scripts.
 
 export SHELL="$SHELL";
 
@@ -41,7 +44,9 @@ FD2="$(readlink -n -f /proc/$$/fd/2)";
 ## Functions
 
 cleanup(){
-	if ! $DEBUG; then rm -f $LOGFILE.{1,2}; fi;
+	if ! $DEBUG; then
+		rm -f "$LOGFILE.1" "$LOGFILE.2";
+	fi;
 }
 
 ################################################################################
@@ -51,8 +56,8 @@ cleanup(){
 #       and function definitions.
 
 # Redirect to logfiles.
-exec 1>>$LOGFILE.1;
-exec 2>>$LOGFILE.2;
+exec 1>>"$LOGFILE.1";
+exec 2>>"$LOGFILE.2";
 
 if $DEBUG; then
 	PS4="\$SELF in PID#\$\$ @\$LINENO: ";
@@ -62,10 +67,10 @@ fi;
 
 # And this will pick up the log, redirecting it to the terminal if we have one.
 if test -n "$FD1" -a "$FD1" != "/dev/null" -a "$FD1" != "$LOGFILE.1"; then
-	tail --pid="$$" -f $LOGFILE.1 >> "$FD1" & trap "kill $!;" 0;
+	tail --pid="$$" -f "$LOGFILE.1" >> "$FD1" & trap "kill $!;" 0;
 fi;
 if test -n "$FD2" -a "$FD2" != "/dev/null" -a "$FD2" != "$LOGFILE.2"; then
-	tail --pid="$$" -f $LOGFILE.2 >> "$FD2" & trap "kill $!;" 0;
+	tail --pid="$$" -f "$LOGFILE.2" >> "$FD2" & trap "kill $!;" 0;
 fi;
 
 # XXX: Fixes a racing condition caused by the shared logging setup.

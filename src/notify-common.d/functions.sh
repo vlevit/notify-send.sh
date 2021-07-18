@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # @file - common.functions.sh
 # @brief - Shared functions for the notify-send.sh suite.
 ###############################################################################

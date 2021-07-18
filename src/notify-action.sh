@@ -27,9 +27,9 @@
 SELF=$(readlink -n -f "$0");
 PROCDIR="$(dirname "$SELF")"; # Process direcotry.
 APPNAME="$(basename "$SELF")";
-TMP=${XDG_RUNTIME_DIR:-/tmp}; # XDG standard runtime directory.
-GDBUS_PIDF=$TMP/${APP_NAME:=${SELF##*/}}.$$.dat;
-LOGFILE=${LOGFILE:=$TMP/notify-action.$$.log};
+TMP="${XDG_RUNTIME_DIR:-/tmp}"; # XDG standard runtime directory.
+GDBUS_PIDF="$TMP/${APP_NAME:=${SELF##*/}}.$$.dat";
+LOGFILE="${LOGFILE:=$TMP/notify-action.$$.log}";
 ACTIONED="false";
 ACTIONC=0;
 #CONCLUDED=; Used to bugfix the exit handler.
@@ -37,14 +37,15 @@ ACTIONC=0;
 #DISPLAY=; # Xorg display to use.
 #ACTION_(.+); # Actions the shell commit on the $1 regex matching gdbus event.
 
-export NOTIFY_CMD_SUCCESS=${NOTIFY_CMD_SUCCESS:=false};
-export NOTIFY_CMD_FAILURE=${NOTIFY_CMD_FAILURE:=true};
+export NOTIFY_CMD_SUCCESS="${NOTIFY_CMD_SUCCESS:=false}";
+export NOTIFY_CMD_FAILURE="${NOTIFY_CMD_FAILURE:=true}";
+export SUCCESS_MSG="$SUCCESS_MSG"
 
 ################################################################################
 ## Imports
 
-. $PROCDIR/notify-common.d/functions.sh; # Import shared code.
-. $PROCDIR/notify-common.d/setup.sh; # Ensures we have debug and logfile stuff together.
+. "$PROCDIR/notify-common.d/functions.sh"; # Import shared code.
+. "$PROCDIR/notify-common.d/setup.sh"; # Ensures we have debug and logfile stuff together.
 
 ################################################################################
 ## Functions
@@ -52,7 +53,7 @@ export NOTIFY_CMD_FAILURE=${NOTIFY_CMD_FAILURE:=true};
 do_action () {
 	ACTION=''; eval "ACTION=\"\$ACTION_$1\"";
 	if test -n "$ACTION"; then
-		setsid /bin/sh $PROCDIR/notify-exec.sh "$ACTION" & ACTIONED="true";
+		setsid /bin/sh "$PROCDIR/notify-exec.sh" "$ACTION" & ACTIONED="true";
 	fi;
 }
 
@@ -103,8 +104,8 @@ while test "$#" -gt 0; do
 		-q|--quietly-fail) NOTIFY_CMD_FAILURE="false";;
 		--notify-success|--notify-success=*)
 			if starts_with "$1" '--notify-success'; then s="${1#*=}"; else shift; s="$1"; fi;
-			NOTIFY_CMD_SUCCESS="true";
-			SUCCESS_MSG="$s";
+			export NOTIFY_CMD_SUCCESS="true";
+			export SUCCESS_MSG="$s";
 		;;
 		*) break 2;;
 	esac;
@@ -137,7 +138,7 @@ test -n "$DISPLAY" || abrt "DISPLAY is unset; No Xorg available.";
 
 # kill obsolete monitors (now)
 printf '%s %s ' "$DISPLAY" "$ID" > "$GDBUS_PIDF";
-for f in ${TMP}/${APPNAME}.*.dat; do
+for f in "${TMP}/${APPNAME}".*.dat; do
 	# Since our PID file suffix is unique, we can guarantee the above will work
 	# for all existing PID files.
 	if ! test -s "$f"; then continue; fi;
@@ -163,12 +164,15 @@ trap "conclude" EXIT HUP INT QUIT ABRT TERM;
 		--dest org.freedesktop.Notifications \
 		--object-path /org/freedesktop/Notifications &
 
-	echo "$!" >> $GDBUS_PIDF;
+	echo "$!" >> "$GDBUS_PIDF";
 } | \
 while IFS=" :.(),'" read -r x x x x e x i x k x; do
 	# XXX: The above read isn't as robust as a regex search and may cause
 	#      this script to break if gdbus's logging format ever changes.
 	#      But it's lightning fast and portable, so the trade is worth it.
+
+	# XXX: Suppression of SC2034 of shellcheck:
+	true "$x";
 
 	# The first two lines always contain garbage data, so supress the illegal
 	# number warnings from test by blocking stderr.
