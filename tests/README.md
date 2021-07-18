@@ -8,6 +8,20 @@ I work back to this, which probably won't be until the next millennia.
 
 &#x1F627; Please help.
 
+
+7:19AM (UTC) 07/18/2021 [Three days following the notes above.]
+TODO: epiphany! I just realized I don't have to heuristically test this using
+other market available notification daemons. What I need to do is impersonate
+a backend, intercept all the notification data and validate that the intent
+is being communicated properly. This is a client, not a server, and shouldn't
+need to be responsible for how servers handle my responses; all I need to do
+is make sure my vocabulary is communicated within spec. But ofc this requires
+an entire rewrite of my test strategy. I'll probably end up writing the new
+version in python when I eventually get to it. This actually reduces the
+complexity of testing because I can use a chroot without needing to spawn
+a new Xorg server and session manager since I'll be essentially spoofing them.
+I still need the chroot to swap out the shells for compatibility testing though.
+
 ---
 
 To test this script, you'll need at least a single POSIX compliant shell,

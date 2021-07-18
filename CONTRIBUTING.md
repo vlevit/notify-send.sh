@@ -1,5 +1,11 @@
 # Guidelines for this fork.
 
+## Git PRs and Commit bits.
+For this project, I use https://commonflow.org, with the exception that
+I only allow PRs to the `develop` branch, because it provides a buffer between
+versioning releases and `latest` / `master` branch updates.
+
+## Code Standards
 Similar to [LinuxCommand's scripting standard][LCstandard],
 each source file must organize the code into four different sections:
  1. **Globals** to be used within the script (excluding single character
@@ -15,7 +21,7 @@ submit your PR and I'll give you some feedback on my thoughts. Sorry I don't
 have a better answer at the moment.
 
 For single or double quotes, you can use either. I try to limit double quotes
-wherever possible BC I think it saves CPU cycles, but that's just me.
+wherever possible because I think it saves CPU cycles, but that's just me.
 
 ### Subshells
 

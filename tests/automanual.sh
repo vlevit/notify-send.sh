@@ -293,8 +293,8 @@ case "$1" in
 	--manual-fallback) MANUAL_FALLBACK='true';;
 esac;
 
-if test -e $PROCDIR/auto-server/${SERVER_NAME}.sh; then
-	. $PROCDIR/auto-server/${SERVER_NAME}.sh;
+if test -e "$PROCDIR/auto-server/${SERVER_NAME}(${SERVER_VERSION}).sh"; then
+	. "$PROCDIR/auto-server/${SERVER_NAME}(${SERVER_VERSION}).sh";
 else
 	if $MANUAL_FALLBACK; then
 		/bin/sh $PROCDIR/manual.sh;

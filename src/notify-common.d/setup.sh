@@ -27,7 +27,7 @@
 TMP=${XDG_RUNTIME_DIR:-/tmp};
 
 # shellcheck disable=SC2059,SC2034
-VERSION="2.0.0+m3tior"; # Should be included in all scripts.
+VERSION="2.0.0-rc.1+m3tior"; # Should be included in all scripts.
 
 export SHELL="$SHELL";
 

@@ -33,5 +33,5 @@
 # TODO: test every feature using `Xfce Notify Daemon`
 
 notify_send(){
-	/bin/sh $PROCDIR/../src/notify-send.sh $*;
+	/bin/sh "$PROCDIR/../src/notify-send.sh" $*;
 }

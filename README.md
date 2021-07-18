@@ -1,4 +1,9 @@
 # `notify-send.sh`
+![https://semver.org/](https://img.shields.io/badge/version-SemVer-informational)
+![https://pubs.opengroup.org/onlinepubs/9699919799](https://img.shields.io/badge/shell-POSIX-informational)
+![https://github.com/koalaman/shellcheck](https://img.shields.io/badge/linter-ShellCheck-informational)
+![](https://img.shields.io/badge/build-untested-important)
+
 notify-send.sh is a replacement solution for notify-send (from
 libnotify) with many extra features you might find useful.
 
@@ -22,12 +27,26 @@ with the notification client standards, and [other useful features][big-changes]
 The dependencies are GNU's `coreutils`, `gdbus` (shipped with glib2), and a any
 POSIX compliant shell as a runtime provider.
 
-In Debian and Ubuntu you can ensure all dependencies are installed with the
+In Ubuntu you can ensure all dependencies are installed with the
 following command (this also prevents automatic install state clobbering):
 
 ```sh
 if ! dpkg -S "$(type -p gdbus)"; then sudo apt-get install libglib2.0-bin; fi;
 ```
+
+***forewarning:*** The TUI has changed, from master. The original TUI wasn't
+POSIX compliant. It sought to emulate and replace notify-send, which used
+a non-POSIX-compliant TUI. That has been discarded in favor of POSIX adherence:
+using `-h` for help over `-?`; `--hint`'s partner has been changed to `-H`.
+Linux is POSIX compliant, and I would argue any OS derived from it should at
+least maintain consistency within that specification. It provides
+a unified interface for users that removes complications when moving between
+alternative distributions.
+
+In the future, I may inquire about introducing these features upstream within
+`notify-send`. I don't want to introduce any extra complexity into the
+Linux notification ecosystem by releasing this toolkit. Think of this as a
+proof of concept project.
 
 ### Examples
 

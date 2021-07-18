@@ -33,4 +33,14 @@ TMP="${XDG_RUNTIME_DIR:-/tmp}";
 ################################################################################
 ## Main Script
 
-/bin/sh $PROCDIR/../src/notify-send.sh "." "";
+notify_send(){
+	/bin/sh "$PROCDIR/../src/notify-send.sh" $*;
+}
+
+# TODO: Make test for basic notification
+# TODO: Make test for notification timeout
+# TODO: Make test for notification body filtering if possible
+# TODO: Make test for notification buttons
+# TODO: Make test for notification default action
+# TODO: Make test for notification close action
+# TODO: test diagnostics info.
