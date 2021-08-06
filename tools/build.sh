@@ -116,6 +116,9 @@ generate_build_version() {
 		if test -z "$VERSION"; then
 			# Auto inc patch version if we haven't manually added a release version.
 			VERSION="$major.$minor.$((patch + 1))";
+			if test -n "$buildmetadata"; then
+				VERSION="${VERSION}-$buildmetadata";
+			fi;
 		fi;
 	else
 		if test "$2" -gt 0; then
@@ -125,7 +128,7 @@ generate_build_version() {
 		else
 			# If we aren't any commits ahead of the last tag, we can assume we're
 			# building a stable release.
-			VERSION="$major.$minor.$patch";
+			VERSION="${1#v}";
 		fi;
 	fi;
 }
