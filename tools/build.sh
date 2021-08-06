@@ -109,26 +109,30 @@ tokenize_semver_string(){
 generate_build_version() {
 	OIFS="$IFS"; IFS="-";
 	set $(git describe --tag --long);
+	# This is really fucking annoying
+	eval "buildhash=\"\$$(($#))\"";
+	eval "commitsahead=\"\$$(($# - 1))\"";
+	tagversion="${@%-${commitsahead}-${buildhash}}";
 	IFS="$OIFS";
 
-	tokenize_semver_string "${1#v}";
+	tokenize_semver_string "${tagversion#v}";
 	if $BUILD_RELEASE; then
 		if test -z "$VERSION"; then
 			# Auto inc patch version if we haven't manually added a release version.
 			VERSION="$major.$minor.$((patch + 1))";
-			if test -n "$buildmetadata"; then
-				VERSION="${VERSION}-$buildmetadata";
+			if test -n "$prerelease"; then
+				VERSION="${VERSION}-$prerelease";
 			fi;
 		fi;
 	else
 		if test "$2" -gt 0; then
 			# Empart a reasonable degree of precedence to the version. dev < rc
-			VERSION="$major.$minor.$((patch + 1))-dev.$2.$3";
+			VERSION="$major.$minor.$((patch + 1))-dev.$commitsahead.$buildhash";
 			return 0;
 		else
 			# If we aren't any commits ahead of the last tag, we can assume we're
 			# building a stable release.
-			VERSION="${1#v}";
+			VERSION="${tagversion#v}";
 		fi;
 	fi;
 }
