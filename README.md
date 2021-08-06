@@ -1,7 +1,7 @@
 # `notify-send.sh`
-![https://semver.org/](https://img.shields.io/badge/version-SemVer-informational)
-![https://pubs.opengroup.org/onlinepubs/9699919799](https://img.shields.io/badge/shell-POSIX-informational)
-![https://github.com/koalaman/shellcheck](https://img.shields.io/badge/linter-ShellCheck-informational)
+[![](https://img.shields.io/badge/version-SemVer-informational)](https://semver.org/)
+[![](https://img.shields.io/badge/shell-POSIX-informational)](https://pubs.opengroup.org/onlinepubs/9699919799)
+[![](https://img.shields.io/badge/linter-ShellCheck-informational)](https://github.com/koalaman/shellcheck)
 ![](https://img.shields.io/badge/build-untested-important)
 
 notify-send.sh is a replacement solution for notify-send (from
