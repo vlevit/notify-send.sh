@@ -114,7 +114,7 @@ generate_build_version() {
 	tokenize_semver_string "${1#v}";
 	if $BUILD_RELEASE; then
 		if test -z "$VERSION"; then
-			# TODO: inc build release by parsing conventional commit branch merges
+			# Auto inc patch version if we haven't manually added a release version.
 			VERSION="$major.$minor.$((patch + 1))";
 		fi;
 	else
@@ -123,8 +123,9 @@ generate_build_version() {
 			VERSION="$major.$minor.$((patch + 1))-dev.$2.$3";
 			return 0;
 		else
-			# If there aren't any
-			VERSION="$major.$"
+			# If we aren't any commits ahead of the last tag, we can assume we're
+			# building a stable release.
+			VERSION="$major.$minor.$patch";
 		fi;
 	fi;
 }
