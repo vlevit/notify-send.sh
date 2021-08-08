@@ -125,7 +125,7 @@ notify() {
     fi
 
     if [[ -n "$FORCE_EXPIRE" ]] ; then
-        SLEEP_TIME="$( printf %f "${EXPIRE_TIME}e-3" )"
+        SLEEP_TIME="$( LC_NUMERIC=C printf %f "${EXPIRE_TIME}e-3" )"
         ( sleep "$SLEEP_TIME" ; notify_close "$NOTIFICATION_ID" ) &
     fi
 
