@@ -13,8 +13,6 @@ other features too:
  * I ensured that `notify-send.sh` and the other child services are now
    written in nothing but pure [POSIX][POSIX] compliant shell. Which includes
    `ksh`, `csh`, `bash`, `ash`, `dash`, `fish` and more shells.
- * In order to make this POSIX compliant, the stylistic changes included
-   in bkw777's fork had to be removed.
  * `notify-action.sh` is now more user friendly.
  * Added `notify-exec.sh` to serve as an action status notifier.
  * `notify-send.sh` can now report information about the notification server.

@@ -125,7 +125,7 @@ generate_build_version() {
 			fi;
 		fi;
 	else
-		if test "$2" -gt 0; then
+		if test "$commitsahead" -gt 0; then
 			# Empart a reasonable degree of precedence to the version. dev < rc
 			VERSION="$major.$minor.$((patch + 1))-dev.$commitsahead.$buildhash";
 			return 0;
@@ -293,6 +293,7 @@ if test -z "$MAINTAINER" && ! MAINTAINER="$(git config --get user.name)"; then
 fi;
 
 generate_build_version;
+rm -rf "$PROCDIR/../build";
 mkdir -p "$PROCDIR/../build"; # We want our build files to appear in the repo root.
 TEMPDIR="$(mktemp -p "$TMP" -d "notify-send-sh_build.XXX")";
 trap "rm -rvf $TEMPDIR" 0;
@@ -302,3 +303,13 @@ for format_distro in $TARGETS; do
 	build_package $format_distro;
 	IFS="$OIFS";
 done;
+
+# Hash generation and signing
+# https://www.gnupg.org/gph/en/manual/x135.html
+if $BUILD_SIGNED; then
+	for file in "$PROCDIR/../build/"*; do
+		sha256sum "$file" >> "$PROCDIR/../build/sums.sha256";
+	done;
+
+	gpg --detach-sign "$PROCDIR/../build/sums.sha256";
+fi;
