@@ -78,9 +78,9 @@ make_action() {
 
 make_hint() {
     type=$(convert_type "$1")
-    [[ ! $? = 0 ]] && return 1
+    [ $? -ne 0 ] && return 1
     name="$2"
-    [[ "$type" = string ]] && command="\"$3\"" || command="$3"
+    [ "$type" = string ] && command="\"$3\"" || command="$3"
     echo "\"$name\": <$type $command>"
 }
 
@@ -117,14 +117,14 @@ notify() {
                             "${actions}" "${hints}" "int32 $EXPIRE_TIME" \
                           | parse_notification_id)
 
-    if [[ -n "$STORE_ID" ]] ; then
+    if [ -n "$STORE_ID" ] ; then
         echo "$NOTIFICATION_ID" > "$STORE_ID"
     fi
-    if [[ -n "$PRINT_ID" ]] ; then
+    if [ -n "$PRINT_ID" ] ; then
         echo "$NOTIFICATION_ID"
     fi
 
-    if [[ -n "$FORCE_EXPIRE" ]] ; then
+    if [ -n "$FORCE_EXPIRE" ] ; then
         SLEEP_TIME="$( LC_NUMERIC=C printf %f "${EXPIRE_TIME}e-3" )"
         ( sleep "$SLEEP_TIME" ; notify_close "$NOTIFICATION_ID" ) &
     fi
@@ -157,12 +157,12 @@ process_category() {
 
 process_hint() {
     IFS=: read type name command <<< "$1"
-    if [[ -z "$name" ]] || [[ -z "$command" ]] ; then
+    if [ -z "$name" ] || [ -z "$command" ] ; then
         echo "Invalid hint syntax specified. Use TYPE:NAME:VALUE."
         exit 1
     fi
     hint="$(make_hint "$type" "$name" "$command")"
-    if [[ ! $? = 0 ]] ; then
+    if [ $? -ne 0 ] ; then
         echo "Invalid hint type \"$type\". Valid types are int, double, string and byte."
         exit 1
     fi
@@ -170,9 +170,9 @@ process_hint() {
 }
 
 maybe_run_action_handler() {
-    if [[ -n "$NOTIFICATION_ID" ]] && [[ -n "$ACTION_COMMANDS" ]]; then
+    if [ -n "$NOTIFICATION_ID" ] && [ -n "$ACTION_COMMANDS" ]; then
         local notify_action="$(dirname ${BASH_SOURCE[0]})/notify-action.sh"
-        if [[ -x "$notify_action" ]] ; then
+        if [ -x "$notify_action" ] ; then
             "$notify_action" "$NOTIFICATION_ID" "${ACTION_COMMANDS[@]}" &
             exit 0
         else
@@ -184,7 +184,7 @@ maybe_run_action_handler() {
 
 process_action() {
     IFS=: read name command <<<"$1"
-    if [[ -z "$name" ]] || [[ -z "$command" ]]; then
+    if [ -z "$name" ] || [ -z "$command" ]; then
         echo "Invalid action syntax specified. Use NAME:COMMAND."
         exit 1
     fi
@@ -200,109 +200,172 @@ process_special_action() {
     action_key="$1"
     command="$2"
 
-    if [[ -z "$action_key" ]] || [[ -z "$command" ]]; then
+    if [ -z "$action_key" ] || [ -z "$command" ]; then
         echo "Command must not be empty"
         exit 1
     fi
 
     ACTION_COMMANDS=("${ACTION_COMMANDS[@]}" "$action_key" "$command")
 
-    if [[ "$action_key" != close ]]; then
+    if [ "$action_key" != close ]; then
         local action="$(make_action "$action_key" "$name")"
         ACTIONS=("${ACTIONS[@]}" "$action")
     fi
 }
 
 process_posargs() {
-    if [[ "$1" = -* ]] && ! [[ "$positional" = yes ]] ; then
-        echo "Unknown option $1"
-        exit 1
+    case "$1" in
+        -*) if [ "$positional" != yes ] ; then
+                echo "Unknown option $1"
+                exit 1
+            fi ;;
+    esac
+
+    if [ "$SUMMARY_SET" = n ]; then
+        SUMMARY="$1"
+        SUMMARY_SET=y
     else
-        if [[ "$SUMMARY_SET" = n ]]; then
-            SUMMARY="$1"
-            SUMMARY_SET=y
-        else
-            BODY="$1"
-        fi
+        BODY="$1"
     fi
 }
 
-while (( $# > 0 )) ; do
+while [ $# -gt 0 ] ; do
     case "$1" in
         -\?|--help)
             help
             exit 0
             ;;
+
         -v|--version)
             echo "${0##*/} $VERSION"
             exit 0
             ;;
-        -u|--urgency|--urgency=*)
-            [[ "$1" = --urgency=* ]] && urgency="${1#*=}" || { shift; urgency="$1"; }
-            process_urgency "$urgency"
+
+        -u|--urgency)
+            shift
+            process_urgency "$1"
             ;;
+        --urgency=*)
+            process_urgency "${1#*=}"
+            ;;
+
         -t|--expire-time|--expire-time=*)
-            [[ "$1" = --expire-time=* ]] && EXPIRE_TIME="${1#*=}" || { shift; EXPIRE_TIME="$1"; }
-            if ! [[ "$EXPIRE_TIME" =~ ^-?[0-9]+$ ]]; then
-                echo "Invalid expire time: ${EXPIRE_TIME}"
-                exit 1;
-            fi
+            case "$1" in
+                --expire-time=*) EXPIRE_TIME="${1#*=}" ;;
+                *) shift; EXPIRE_TIME="$1" ;;
+            esac
+            # check if it is a numeric value
+            case "${EXPIRE_TIME#-}" in
+                *[![:digit:]]*|"")
+                    echo "Invalid expire time: ${EXPIRE_TIME}"
+                    exit 1
+                    ;;
+            esac
             ;;
+
         -f|--force-expire)
             FORCE_EXPIRE=yes
             ;;
-        -a|--app-name|--app-name=*)
-            [[ "$1" = --app-name=* ]] && APP_NAME="${1#*=}" || { shift; APP_NAME="$1"; }
+
+        -a|--app-name)
+            shift
+            APP_NAME="$1"
             ;;
-        -i|--icon|--icon=*)
-            [[ "$1" = --icon=* ]] && ICON="${1#*=}" || { shift; ICON="$1"; }
+        --app-name=*)
+            APP_NAME="${1#*=}"
             ;;
-        -c|--category|--category=*)
-            [[ "$1" = --category=* ]] && category="${1#*=}" || { shift; category="$1"; }
-            process_category "$category"
+
+        -i|--icon)
+            shift
+            ICON="$1"
             ;;
-        -h|--hint|--hint=*)
-            [[ "$1" = --hint=* ]] && hint="${1#*=}" || { shift; hint="$1"; }
-            process_hint "$hint"
+        --icon=*)
+            ICON="${1#*=}"
             ;;
-        -o | --action | --action=*)
-            [[ "$1" == --action=* ]] && action="${1#*=}" || { shift; action="$1"; }
-            process_action "$action"
+
+        -c|--category)
+            shift
+            process_category "$1"
             ;;
-        -d | --default-action | --default-action=*)
-            [[ "$1" == --default-action=* ]] && default_action="${1#*=}" || { shift; default_action="$1"; }
-            process_special_action default "$default_action"
+        --category=*)
+            process_category "${1#*=}"
             ;;
-        -l | --close-action | --close-action=*)
-            [[ "$1" == --close-action=* ]] && close_action="${1#*=}" || { shift; close_action="$1"; }
-            process_special_action close "$close_action"
+
+        -h|--hint)
+            shift
+            process_hint "$1"
             ;;
+        --hint=*)
+            process_hint "${1#*=}"
+            ;;
+
+        -o|--action)
+            shift
+            process_action "$1"
+            ;;
+        --action=*)
+            process_action "${1#*=}"
+            ;;
+
+        -d|--default-action)
+            shift
+            process_special_action default "$1"
+            ;;
+        --default-action=*)
+            process_special_action default "${1#*=}"
+            ;;
+
+        -l|--close-action)
+            shift
+            process_special_action close "$1"
+            ;;
+        --close-action=*)
+            process_special_action close "${1#*=}"
+            ;;
+
         -p|--print-id)
             PRINT_ID=yes
             ;;
-        -r|--replace|--replace=*)
-            [[ "$1" = --replace=* ]] && REPLACE_ID="${1#*=}" || { shift; REPLACE_ID="$1"; }
+
+        -r|--replace)
+            shift
+            REPLACE_ID="$1"
             ;;
+        --replace=*)
+            REPLACE_ID="${1#*=}"
+            ;;
+
         -R|--replace-file|--replace-file=*)
-            [[ "$1" = --replace-file=* ]] && filename="${1#*=}" || { shift; filename="$1"; }
-            if [[ -s "$filename" ]]; then
+            case "$1" in
+                --replace-file=*) filename="${1#*=}" ;;
+                *) shift; filename="$1" ;;
+            esac
+            if [ -s "$filename" ]; then
                 REPLACE_ID="$(< "$filename")"
             fi
             STORE_ID="$filename"
             ;;
+
         -s|--close|--close=*)
-            [[ "$1" = --close=* ]] && close_id="${1#*=}" || { shift; close_id="$1"; }
+            case "$1" in
+                --close=*) close_id="${1#*=}" ;;
+                *) shift; close_id="$1" ;;
+            esac
             # always check that --close provides a numeric value
-            if [[ -z "$close_id" || ! "$close_id" =~ ^[0-9]+$ ]]; then
-              echo "Invalid close id: '$close_id'"
-              exit 1
-            fi
+            case "${close_id#*-}" in
+                *[![:digit:]]*|"")
+                  echo "Invalid close id: '$close_id'"
+                  exit 1
+                  ;;
+            esac
             notify_close "$close_id"
             exit $?
             ;;
+
         --)
             positional=yes
             ;;
+
         *)
             process_posargs "$1"
             ;;
@@ -311,14 +374,15 @@ while (( $# > 0 )) ; do
 done
 
 # always force --replace and --replace-file to provide a numeric value; 0 means no id provided
-if [[ -z "$REPLACE_ID" || ! "$REPLACE_ID" =~ ^[0-9]+$ ]]; then
-    REPLACE_ID=0
-fi
+case "$REPLACE_ID" in
+    # empty or something in [[:digit:]]
+    ""|*[![:digit:]]*) REPLACE_ID=0 ;;
+esac
 
 # urgency is always set
 HINTS=("$(make_hint byte urgency "$URGENCY")" "${HINTS[@]}")
 
-if [[ "$SUMMARY_SET" = n ]] ; then
+if [ "$SUMMARY_SET" = n ] ; then
     help
     exit 1
 else
